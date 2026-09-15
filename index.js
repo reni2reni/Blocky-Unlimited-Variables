@@ -551,33 +551,37 @@ try {
     // ==========================================
     // 右側：変数一覧の再描画
     // ==========================================
+    // ==========================================
+    // 右側：変数一覧の再描画 (DEF / A-Z / Z-A 対応)
+    // ==========================================
     function rebuildList() {
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
       center.innerHTML = "";
       initDnDIfNeeded();
 
-      // ヘッダー部
+      // ヘッダー部コンテナ
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.marginBottom = "8px";
 
-      // タイトル ＋ 並び替えボタン（タイトルの横に配置）
+      // 左側：タイトル ＋ 並び替えボタン
       const leftHeader = document.createElement("div");
       leftHeader.style.display = "flex";
       leftHeader.style.alignItems = "center";
+      leftHeader.style.gap = "8px";
 
       const h = document.createElement("div");
       h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
       leftHeader.appendChild(h);
 
-      // ★ タイトル横の並び替えボタン
+      // ★ 3段階切り替え並び替えボタン
       const sortBtn = document.createElement("button");
-      sortBtn.className = "ev-sort-btn";
+      sortBtn.className = "ev-btn ev-sort-btn";
+      sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #555; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
-      // ラベル表示切り替え
       if (sortMode === "asc") {
         sortBtn.innerText = "↓ 名前順 (A-Z)";
       } else if (sortMode === "desc") {
@@ -586,7 +590,6 @@ try {
         sortBtn.innerText = "⇅ 並替: DEF";
       }
 
-      // クリックで DEF -> A-Z -> Z-A -> DEF と循環
       sortBtn.onclick = () => {
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
@@ -596,7 +599,20 @@ try {
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // (中略: Addボタンの生成などは既存のまま)
+      // 右側：Addボタン
+      const addBtn = document.createElement("button");
+      addBtn.className = "ev-btn ev-add";
+      addBtn.innerText = "Add";
+      addBtn.onclick = () => {
+        const name = prompt("Enter variable name:");
+        if (!name) return;
+        const id = createID();
+        createWorkspaceVariable(ws, name, currentCategory, id);
+        rebuildCategories();
+        rebuildList();
+      };
+      header.appendChild(addBtn);
+      center.appendChild(header);
 
       // 変数リストの取得
       let arr = [...(live[currentCategory] || [])];
@@ -608,14 +624,14 @@ try {
         return;
       }
 
-      // ★ 選択されたモードに応じて表示順をソート
+      // ソートモードに応じて配列を並び替え
       if (sortMode === "asc") {
         arr.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
       } else if (sortMode === "desc") {
         arr.sort((a, b) => (b.name || "").toLowerCase().localeCompare((a.name || "").toLowerCase()));
       }
-      // "def" の場合は元の配列順のまま表示
 
+      // 各行の生成
       arr.forEach((v) => {
         const row = document.createElement("div");
         row.className = "ev-row";
@@ -671,7 +687,7 @@ try {
         row.appendChild(rightCol);
         center.appendChild(row);
 
-        // 変数行のDnD処理
+        // 変数行のドラッグ処理
         dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
         dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
 
