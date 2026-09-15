@@ -430,7 +430,8 @@ try {
     content.appendChild(center);
 
     let currentCategory = CATEGORIES[0];
-    let sortAsc = true; // 並び替え昇順/降順フラグ
+    // ソートモード: "def" (デフォルト) -> "asc" (A-Z) -> "desc" (Z-A)
+    let sortMode = "def";
 
     // ==========================================
     // 左側：カテゴリ一覧の再描画 ＆ ドラッグ移動
@@ -495,9 +496,11 @@ try {
         el.appendChild(countSpan);
 
         // クリックでカテゴリ切り替え（ハンドル操作時は無視）
-        el.onclick = (e) => {
-          if (e.target === handle) return;
-          currentCategory = cat;
+        center.ondrop = (ev) => {
+          ev.preventDefault();
+          sortMode = "def"; // ★ 手動移動したらDEF順にする
+          const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
+          reorderVariablesInMap(ws, currentCategory, newOrder);
           rebuildCategories();
           rebuildList();
         };
@@ -548,52 +551,55 @@ try {
     // ==========================================
     // 右側：変数一覧の再描画
     // ==========================================
+    // ==========================================
+    // 右側：変数一覧の再描画 (DEF / A-Z / Z-A 対応)
+    // ==========================================
     function rebuildList() {
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
       center.innerHTML = "";
       initDnDIfNeeded();
 
-      // ヘッダー部
+      // ヘッダー部コンテナ
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.marginBottom = "8px";
 
-      // タイトル ＋ 並び替えボタン（タイトルの横に配置）
+      // 左側：タイトル ＋ 並び替えボタン
       const leftHeader = document.createElement("div");
       leftHeader.style.display = "flex";
       leftHeader.style.alignItems = "center";
+      leftHeader.style.gap = "8px";
 
       const h = document.createElement("div");
       h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
       leftHeader.appendChild(h);
 
-      // ★ タイトル横の並び替えボタン
+      // ★ 3段階切り替え並び替えボタン
       const sortBtn = document.createElement("button");
-      sortBtn.className = "ev-sort-btn";
-      sortBtn.innerText = sortAsc ? "⇅ 名前順 (A-Z)" : "⇅ 名前順 (Z-A)";
+      sortBtn.className = "ev-btn ev-sort-btn";
+      sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #555; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
+
+      if (sortMode === "asc") {
+        sortBtn.innerText = "↓ 名前順 (A-Z)";
+      } else if (sortMode === "desc") {
+        sortBtn.innerText = "↑ 名前順 (Z-A)";
+      } else {
+        sortBtn.innerText = "⇅ 並替: DEF";
+      }
+
       sortBtn.onclick = () => {
-        const currentVars = [...(live[currentCategory] || [])];
-        if (currentVars.length === 0) return;
-
-        currentVars.sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase();
-          const nameB = (b.name || "").toLowerCase();
-          return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-        });
-
-        sortAsc = !sortAsc;
-        const sortedIds = currentVars.map(v => v.id);
-        reorderVariablesInMap(ws, currentCategory, sortedIds);
-        rebuildCategories();
+        if (sortMode === "def") sortMode = "asc";
+        else if (sortMode === "asc") sortMode = "desc";
+        else sortMode = "def";
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // Add ボタン
+      // 右側：Addボタン
       const addBtn = document.createElement("button");
       addBtn.className = "ev-btn ev-add";
       addBtn.innerText = "Add";
@@ -608,7 +614,8 @@ try {
       header.appendChild(addBtn);
       center.appendChild(header);
 
-      const arr = live[currentCategory] || [];
+      // 変数リストの取得
+      let arr = [...(live[currentCategory] || [])];
       if (arr.length === 0) {
         const empty = document.createElement("div");
         empty.className = "ev-muted";
@@ -617,6 +624,14 @@ try {
         return;
       }
 
+      // ソートモードに応じて配列を並び替え
+      if (sortMode === "asc") {
+        arr.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+      } else if (sortMode === "desc") {
+        arr.sort((a, b) => (b.name || "").toLowerCase().localeCompare((a.name || "").toLowerCase()));
+      }
+
+      // 各行の生成
       arr.forEach((v) => {
         const row = document.createElement("div");
         row.className = "ev-row";
@@ -672,7 +687,7 @@ try {
         row.appendChild(rightCol);
         center.appendChild(row);
 
-        // 変数行のDnD処理
+        // 変数行のドラッグ処理
         dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
         dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
 
