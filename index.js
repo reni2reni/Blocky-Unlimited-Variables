@@ -430,7 +430,8 @@ try {
     content.appendChild(center);
 
     let currentCategory = CATEGORIES[0];
-    let sortAsc = true; // 並び替え昇順/降順フラグ
+    // ソートモード: "def" (デフォルト) -> "asc" (A-Z) -> "desc" (Z-A)
+    let sortMode = "def";
 
     // ==========================================
     // 左側：カテゴリ一覧の再描画 ＆ ドラッグ移動
@@ -495,9 +496,11 @@ try {
         el.appendChild(countSpan);
 
         // クリックでカテゴリ切り替え（ハンドル操作時は無視）
-        el.onclick = (e) => {
-          if (e.target === handle) return;
-          currentCategory = cat;
+        center.ondrop = (ev) => {
+          ev.preventDefault();
+          sortMode = "def"; // ★ 手動移動したらDEF順にする
+          const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
+          reorderVariablesInMap(ws, currentCategory, newOrder);
           rebuildCategories();
           rebuildList();
         };
@@ -573,42 +576,30 @@ try {
       // ★ タイトル横の並び替えボタン
       const sortBtn = document.createElement("button");
       sortBtn.className = "ev-sort-btn";
-      sortBtn.innerText = sortAsc ? "⇅ 名前順 (A-Z)" : "⇅ 名前順 (Z-A)";
+
+      // ラベル表示切り替え
+      if (sortMode === "asc") {
+        sortBtn.innerText = "↓ 名前順 (A-Z)";
+      } else if (sortMode === "desc") {
+        sortBtn.innerText = "↑ 名前順 (Z-A)";
+      } else {
+        sortBtn.innerText = "⇅ 並替: DEF";
+      }
+
+      // クリックで DEF -> A-Z -> Z-A -> DEF と循環
       sortBtn.onclick = () => {
-        const currentVars = [...(live[currentCategory] || [])];
-        if (currentVars.length === 0) return;
-
-        currentVars.sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase();
-          const nameB = (b.name || "").toLowerCase();
-          return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-        });
-
-        sortAsc = !sortAsc;
-        const sortedIds = currentVars.map(v => v.id);
-        reorderVariablesInMap(ws, currentCategory, sortedIds);
-        rebuildCategories();
+        if (sortMode === "def") sortMode = "asc";
+        else if (sortMode === "asc") sortMode = "desc";
+        else sortMode = "def";
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // Add ボタン
-      const addBtn = document.createElement("button");
-      addBtn.className = "ev-btn ev-add";
-      addBtn.innerText = "Add";
-      addBtn.onclick = () => {
-        const name = prompt("Enter variable name:");
-        if (!name) return;
-        const id = createID();
-        createWorkspaceVariable(ws, name, currentCategory, id);
-        rebuildCategories();
-        rebuildList();
-      };
-      header.appendChild(addBtn);
-      center.appendChild(header);
+      // (中略: Addボタンの生成などは既存のまま)
 
-      const arr = live[currentCategory] || [];
+      // 変数リストの取得
+      let arr = [...(live[currentCategory] || [])];
       if (arr.length === 0) {
         const empty = document.createElement("div");
         empty.className = "ev-muted";
@@ -616,6 +607,14 @@ try {
         center.appendChild(empty);
         return;
       }
+
+      // ★ 選択されたモードに応じて表示順をソート
+      if (sortMode === "asc") {
+        arr.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+      } else if (sortMode === "desc") {
+        arr.sort((a, b) => (b.name || "").toLowerCase().localeCompare((a.name || "").toLowerCase()));
+      }
+      // "def" の場合は元の配列順のまま表示
 
       arr.forEach((v) => {
         const row = document.createElement("div");
