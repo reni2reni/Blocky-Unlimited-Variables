@@ -14,9 +14,9 @@
 
   // categories
   let CATEGORIES = [
-    "Global","AreaTrigger","CapturePoint","EmplacementSpawner","HQ","InteractPoint","LootSpawner","MCOM",
-    "Player","RingOfFire","ScreenEffect","Sector","SFX","SpatialObject","Spawner","SpawnPoint","Team",
-    "Vehicle","VehicleSpawner","VFX","VO","WaypointPath","WorldIcon"
+    "Global", "AreaTrigger", "CapturePoint", "EmplacementSpawner", "HQ", "InteractPoint", "LootSpawner", "MCOM",
+    "Player", "RingOfFire", "ScreenEffect", "Sector", "SFX", "SpatialObject", "Spawner", "SpawnPoint", "Team",
+    "Vehicle", "VehicleSpawner", "VFX", "VO", "WaypointPath", "WorldIcon"
   ];
 
   // ---------- workspace helpers ----------
@@ -339,102 +339,110 @@ try {
       .ev-drag-handle{width:16px;height:16px;cursor:grab;display:flex;align-items:center;justify-content:center;color:#aaaaaa;font-size:14px;flex-shrink:0;user-select:none}
       .ev-drag-handle::before{content:"⋮⋮";line-height:1}
       .ev-row.dragging .ev-drag-handle{cursor:grabbing;color:#ffffff}
-      .ev-cat.dragging{opacity:0.6;background:#252525}
+       .ev-cat{user-select:none;position:relative}
+      .ev-cat.dragging{opacity:0.4;background:#333}
       .ev-cat-left{display:flex;align-items:center;gap:8px}
+      .ev-sort-btn{background:#2a2a2a;border:1px solid #444;font-size:12px;padding:3px 8px;margin-left:8px;border-radius:4px;cursor:pointer}
+      .ev-sort-btn:hover{background:#3a3a3a}
     `;
     document.head.appendChild(style);
   })();
 
   // ---------- modal ----------
+  // ---------- modal ----------
   let modalOverlay = null;
-  function removeModal(){ if(modalOverlay){ try{modalOverlay.remove();}catch(e){} modalOverlay=null;} }
+  function removeModal() { if (modalOverlay) { try { modalOverlay.remove(); } catch (e) { } modalOverlay = null; } }
 
   function openModal() {
     removeModal();
     const ws = getMainWorkspaceSafe();
     const live = getLiveRegistry();
 
-    modalOverlay = document.createElement("div"); 
+    modalOverlay = document.createElement("div");
     modalOverlay.className = "ev-overlay";
-    const modal = document.createElement("div"); 
-    modal.className = "ev-modal"; 
+    const modal = document.createElement("div");
+    modal.className = "ev-modal";
     modalOverlay.appendChild(modal);
 
-    const top = document.createElement("div"); 
+    const top = document.createElement("div");
     top.className = "ev-top";
-    const title = document.createElement("div"); 
-    title.className = "ev-title"; 
-    title.innerText = "Advanced Variable Manager"; 
+    const title = document.createElement("div");
+    title.className = "ev-title";
+    title.innerText = "Advanced Variable Manager";
     top.appendChild(title);
 
-    const topActions = document.createElement("div"); 
-    const closeBtn = document.createElement("button"); 
-    closeBtn.className = "ev-btn ev-del"; 
-    closeBtn.innerText = "Close"; 
-    closeBtn.onclick = () => removeModal(); 
-    topActions.appendChild(closeBtn); 
-    top.appendChild(topActions); 
+    const topActions = document.createElement("div");
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "ev-btn ev-del";
+    closeBtn.innerText = "Close";
+    closeBtn.onclick = () => removeModal();
+    topActions.appendChild(closeBtn);
+    top.appendChild(topActions);
     modal.appendChild(top);
 
-    const content = document.createElement("div"); 
-    content.className = "ev-content"; 
+    const content = document.createElement("div");
+    content.className = "ev-content";
     modal.appendChild(content);
 
-    const left = document.createElement("div"); 
+    const left = document.createElement("div");
     left.className = "ev-cats";
-    const center = document.createElement("div"); 
+    const center = document.createElement("div");
     center.className = "ev-list";
 
-    content.appendChild(left); 
+    content.appendChild(left);
     content.appendChild(center);
 
     let currentCategory = CATEGORIES[0];
-    let sortAsc = true; // ソート昇順/降順トグル用
+    let sortAsc = true; // 並び替え昇順/降順フラグ
 
-    // ---------- カテゴリのDnD初期化 ----------
-    function initCatDnDIfNeeded() {
-      if (left.dataset.dndInit === "1") return;
-      left.dataset.dndInit = "1";
-
-      left.addEventListener("dragover", ev => {
+    // ==========================================
+    // 左側：カテゴリ一覧の再描画 ＆ ドラッグ移動
+    // ==========================================
+    function initCatDnD() {
+      left.ondragover = (ev) => {
         ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
         const dragging = left.querySelector(".ev-cat.dragging");
         if (!dragging) return;
         const cats = [...left.querySelectorAll(".ev-cat:not(.dragging)")];
         const after = cats.find(c => ev.clientY <= c.getBoundingClientRect().top + c.offsetHeight / 2);
         if (after) left.insertBefore(dragging, after);
         else left.appendChild(dragging);
-      });
+      };
 
-      left.addEventListener("drop", () => {
+      left.ondrop = (ev) => {
+        ev.preventDefault();
         CATEGORIES = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName);
         rebuildCategories();
-      });
+      };
     }
 
     function rebuildCategories() {
       left.innerHTML = "";
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
-      initCatDnDIfNeeded();
+      initCatDnD();
 
       for (const cat of CATEGORIES) {
         const el = document.createElement("div");
         el.className = "ev-cat";
-        el.setAttribute("draggable", "true");
         el.dataset.catName = cat;
         if (cat === currentCategory) el.classList.add("selected");
 
         const count = (live[cat] || []).length;
 
-        // 左側のタグ(ドラッグハンドル)と名前
+        // 左側のタグ（ドラッグハンドル）とカテゴリ名
         const leftWrap = document.createElement("div");
         leftWrap.className = "ev-cat-left";
+
         const handle = document.createElement("div");
         handle.className = "ev-drag-handle";
+        handle.title = "ドラッグしてグループ順を変更";
+
         const nameSpan = document.createElement("span");
         nameSpan.style.fontWeight = "600";
         nameSpan.innerText = cat;
+
         leftWrap.appendChild(handle);
         leftWrap.appendChild(nameSpan);
 
@@ -445,7 +453,7 @@ try {
         el.appendChild(leftWrap);
         el.appendChild(countSpan);
 
-        // クリックでカテゴリ切り替え (ハンドル以外の部分)
+        // クリックでカテゴリ切り替え（ハンドル操作時は無視）
         el.onclick = (e) => {
           if (e.target === handle) return;
           currentCategory = cat;
@@ -453,72 +461,78 @@ try {
           rebuildList();
         };
 
-        // DnD用イベント
-        let allowDrag = false;
-        handle.addEventListener("mousedown", () => { allowDrag = true; });
-        document.addEventListener("mouseup", () => { allowDrag = false; });
-        el.addEventListener("dragstart", (e) => {
-          if (!allowDrag) { e.preventDefault(); return; }
+        // タグ（ハンドル）を掴んだ時だけドラッグ可能にする
+        handle.onmousedown = () => { el.setAttribute("draggable", "true"); };
+        handle.onmouseup = () => { el.removeAttribute("draggable"); };
+
+        el.ondragstart = (ev) => {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", cat);
           el.classList.add("dragging");
-        });
-        el.addEventListener("dragend", () => {
+        };
+
+        el.ondragend = () => {
           el.classList.remove("dragging");
-          allowDrag = false;
-        });
+          el.removeAttribute("draggable");
+        };
 
         left.appendChild(el);
       }
     }
 
+    // ==========================================
+    // 右側：変数のドラッグ移動初期化
+    // ==========================================
     function initDnDIfNeeded() {
-      if (center.dataset.dndInit === "1") return;
-      center.dataset.dndInit = "1";
-
-      center.addEventListener("dragover", ev => {
+      center.ondragover = (ev) => {
         ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
         const dragging = center.querySelector(".ev-row.dragging");
         if (!dragging) return;
-
         const rows = [...center.querySelectorAll(".ev-row:not(.dragging)")];
         const after = rows.find(r => ev.clientY <= r.getBoundingClientRect().top + r.offsetHeight / 2);
-
         if (after) center.insertBefore(dragging, after);
         else center.appendChild(dragging);
-      });
+      };
 
-      center.addEventListener("drop", () => {
+      center.ondrop = (ev) => {
+        ev.preventDefault();
         const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
         reorderVariablesInMap(ws, currentCategory, newOrder);
         rebuildCategories();
         rebuildList();
-      });
+      };
     }
 
+    // ==========================================
+    // 右側：変数一覧の再描画
+    // ==========================================
     function rebuildList() {
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
       center.innerHTML = "";
       initDnDIfNeeded();
 
+      // ヘッダー部
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.marginBottom = "8px";
 
-      // タイトル表示
+      // タイトル ＋ 並び替えボタン（タイトルの横に配置）
+      const leftHeader = document.createElement("div");
+      leftHeader.style.display = "flex";
+      leftHeader.style.alignItems = "center";
+
       const h = document.createElement("div");
       h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
-      header.appendChild(h);
+      leftHeader.appendChild(h);
 
-      // 右側のアクション群（並び替えボタン ＋ 新規追加ボタン）
-      const headerBtns = document.createElement("div");
-      headerBtns.style.display = "flex";
-      headerBtns.style.gap = "6px";
-
+      // ★ タイトル横の並び替えボタン
       const sortBtn = document.createElement("button");
-      sortBtn.className = "ev-btn ev-edit";
-      sortBtn.innerText = sortAsc ? "Sort: A-Z" : "Sort: Z-A";
+      sortBtn.className = "ev-sort-btn";
+      sortBtn.innerText = sortAsc ? "⇅ 名前順 (A-Z)" : "⇅ 名前順 (Z-A)";
       sortBtn.onclick = () => {
         const currentVars = [...(live[currentCategory] || [])];
         if (currentVars.length === 0) return;
@@ -535,7 +549,10 @@ try {
         rebuildCategories();
         rebuildList();
       };
+      leftHeader.appendChild(sortBtn);
+      header.appendChild(leftHeader);
 
+      // Add ボタン
       const addBtn = document.createElement("button");
       addBtn.className = "ev-btn ev-add";
       addBtn.innerText = "Add";
@@ -547,10 +564,7 @@ try {
         rebuildCategories();
         rebuildList();
       };
-
-      headerBtns.appendChild(sortBtn);
-      headerBtns.appendChild(addBtn);
-      header.appendChild(headerBtns);
+      header.appendChild(addBtn);
       center.appendChild(header);
 
       const arr = live[currentCategory] || [];
@@ -562,17 +576,12 @@ try {
         return;
       }
 
-    // --- 以下、変数行の生成処理 (既存のまま) ---
-
-      arr.forEach((v, idx) => {
-        console.log("[ExtVars][RowBuild]", currentCategory, "idx", idx, "id", v.id, "name", v.name);
-
-        const row = document.createElement("div"); 
+      arr.forEach((v) => {
+        const row = document.createElement("div");
         row.className = "ev-row";
-        row.setAttribute("draggable", "true");
         row.dataset.varId = v.id;
 
-        const leftCol = document.createElement("div"); 
+        const leftCol = document.createElement("div");
         leftCol.className = "ev-row-left";
 
         const dragHandle = document.createElement("div");
@@ -590,10 +599,10 @@ try {
 
         const rightCol = document.createElement("div");
 
-        const editBtn = document.createElement("button"); 
-        editBtn.className = "ev-btn ev-edit"; 
-        editBtn.style.marginRight = "6px"; 
-        editBtn.innerText = "Edit"; 
+        const editBtn = document.createElement("button");
+        editBtn.className = "ev-btn ev-edit";
+        editBtn.style.marginRight = "6px";
+        editBtn.innerText = "Edit";
         editBtn.onclick = () => {
           const newName = prompt("Enter new name for variable:", v.name);
           if (!newName) return;
@@ -604,62 +613,47 @@ try {
           rebuildCategories();
           rebuildList();
         };
-      
-        const delBtn = document.createElement("button"); 
-        delBtn.className = "ev-btn ev-del"; 
-        delBtn.innerText = "Delete"; 
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "ev-btn ev-del";
+        delBtn.innerText = "Delete";
         delBtn.onclick = () => {
           if (!confirm(`Delete variable "${v.name}"? This may break blocks referencing it.`)) return;
           deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
-          rebuildCategories(); 
+          rebuildCategories();
           rebuildList();
         };
 
-        rightCol.appendChild(editBtn); 
-        rightCol.appendChild(delBtn); 
+        rightCol.appendChild(editBtn);
+        rightCol.appendChild(delBtn);
 
-        row.appendChild(leftCol); 
-        row.appendChild(rightCol); 
+        row.appendChild(leftCol);
+        row.appendChild(rightCol);
         center.appendChild(row);
 
-        // Handle-only drag logic with debug
-        let allowDrag = false;
+        // 変数行のDnD処理
+        dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
+        dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
 
-        dragHandle.addEventListener("mousedown", () => {
-          allowDrag = true;
-          console.log("[ExtVars][DnD] mousedown on handle for", v.id);
-        });
-
-        document.addEventListener("mouseup", () => {
-          if (allowDrag) {
-            console.log("[ExtVars][DnD] mouseup, clearing allowDrag for", v.id);
-          }
-          allowDrag = false;
-        });
-
-        row.addEventListener("dragstart", ev => {
-          console.log("[ExtVars][DnD] dragstart on row", v.id, "allowDrag =", allowDrag);
-          if (!allowDrag) {
-            ev.preventDefault();
-            return;
-          }
+        row.ondragstart = (ev) => {
+          ev.dataTransfer.effectAllowed = "move";
           ev.dataTransfer.setData("text/plain", v.id);
           row.classList.add("dragging");
-        });
+        };
 
-        row.addEventListener("dragend", () => {
-          console.log("[ExtVars][DnD] dragend on row", v.id);
+        row.ondragend = () => {
           row.classList.remove("dragging");
-          allowDrag = false;
-        });
+          row.removeAttribute("draggable");
+        };
       });
     }
 
-    rebuildCategories(); 
+    rebuildCategories();
     rebuildList();
     modalOverlay.addEventListener("click", (ev) => { if (ev.target === modalOverlay) removeModal(); });
     document.body.appendChild(modalOverlay);
   }
+
 
   // ---------- context menu ----------
   function registerContextMenuItem(){
