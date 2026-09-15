@@ -13,11 +13,44 @@
   } catch (e) { plugin = { id: PLUGIN_ID }; }
 
   // categories
-  let CATEGORIES = [
+  let DEFAULT_CATEGORIES = [
     "Global", "AreaTrigger", "CapturePoint", "EmplacementSpawner", "HQ", "InteractPoint", "LootSpawner", "MCOM",
     "Player", "RingOfFire", "ScreenEffect", "Sector", "SFX", "SpatialObject", "Spawner", "SpawnPoint", "Team",
     "Vehicle", "VehicleSpawner", "VFX", "VO", "WaypointPath", "WorldIcon"
   ];
+
+  const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
+
+  // 保存された順序を読み込む（不足している項目があれば末尾に追加）
+  function loadCategoryOrder() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CATS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const ordered = parsed.filter(c => DEFAULT_CATEGORIES.includes(c));
+          DEFAULT_CATEGORIES.forEach(c => {
+            if (!ordered.includes(c)) ordered.push(c);
+          });
+          return ordered;
+        }
+      }
+    } catch (e) {
+      console.warn("[ExtVars] Failed to load category order:", e);
+    }
+    return [...DEFAULT_CATEGORIES];
+  }
+
+  // カテゴリ順序を保存する
+  function saveCategoryOrder(order) {
+    try {
+      localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
+    } catch (e) {
+      console.warn("[ExtVars] Failed to save category order:", e);
+    }
+  }
+
+  let CATEGORIES = loadCategoryOrder();
 
   // ---------- workspace helpers ----------
   function getMainWorkspaceSafe() {
@@ -413,6 +446,7 @@ try {
       left.ondrop = (ev) => {
         ev.preventDefault();
         CATEGORIES = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName);
+        saveCategoryOrder(CATEGORIES);
         rebuildCategories();
       };
     }
