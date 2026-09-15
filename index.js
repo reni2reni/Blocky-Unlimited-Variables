@@ -13,7 +13,7 @@
   } catch (e) { plugin = { id: PLUGIN_ID }; }
 
   // categories
-  let DEFAULT_CATEGORIES = [
+  const DEFAULT_CATEGORIES = [
     "Global", "AreaTrigger", "CapturePoint", "EmplacementSpawner", "HQ", "InteractPoint", "LootSpawner", "MCOM",
     "Player", "RingOfFire", "ScreenEffect", "Sector", "SFX", "SpatialObject", "Spawner", "SpawnPoint", "Team",
     "Vehicle", "VehicleSpawner", "VFX", "VO", "WaypointPath", "WorldIcon"
@@ -21,7 +21,7 @@
 
   const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
 
-  // 保存された順序を読み込む（不足している項目があれば末尾に追加）
+  // 保存された順序を読み込む
   function loadCategoryOrder() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CATS);
@@ -32,12 +32,14 @@
           DEFAULT_CATEGORIES.forEach(c => {
             if (!ordered.includes(c)) ordered.push(c);
           });
+          console.log("[ExtVars][CatOrder] ストレージから順序を読み込みました:", ordered);
           return ordered;
         }
       }
     } catch (e) {
-      console.warn("[ExtVars] Failed to load category order:", e);
+      console.warn("[ExtVars][CatOrder] 読み込み失敗:", e);
     }
+    console.log("[ExtVars][CatOrder] デフォルト順序を使用します");
     return [...DEFAULT_CATEGORIES];
   }
 
@@ -45,8 +47,9 @@
   function saveCategoryOrder(order) {
     try {
       localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
+      console.log("[ExtVars][CatOrder] ストレージに順序を保存しました:", order);
     } catch (e) {
-      console.warn("[ExtVars] Failed to save category order:", e);
+      console.warn("[ExtVars][CatOrder] 保存失敗:", e);
     }
   }
 
@@ -388,6 +391,7 @@ try {
 
   function openModal() {
     removeModal();
+    CATEGORIES = loadCategoryOrder();
     const ws = getMainWorkspaceSafe();
     const live = getLiveRegistry();
 
@@ -445,8 +449,11 @@ try {
 
       left.ondrop = (ev) => {
         ev.preventDefault();
-        CATEGORIES = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName);
-        saveCategoryOrder(CATEGORIES);
+        const domCats = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName).filter(Boolean);
+        if (domCats.length > 0) {
+          CATEGORIES = domCats;
+          saveCategoryOrder(CATEGORIES); // ★ ここで保存を実行＆ログ出力
+        }
         rebuildCategories();
       };
     }
