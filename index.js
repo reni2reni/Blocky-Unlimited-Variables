@@ -32,14 +32,14 @@
           DEFAULT_CATEGORIES.forEach(c => {
             if (!ordered.includes(c)) ordered.push(c);
           });
-          console.log("[ExtVars][CatOrder] ストレージから順序を読み込みました:", ordered);
+          //console.log("[ExtVars][CatOrder] ストレージから順序を読み込みました:", ordered);
           return ordered;
         }
       }
     } catch (e) {
-      console.warn("[ExtVars][CatOrder] 読み込み失敗:", e);
+      //console.warn("[ExtVars][CatOrder] 読み込み失敗:", e);
     }
-    console.log("[ExtVars][CatOrder] デフォルト順序を使用します");
+    //console.log("[ExtVars][CatOrder] デフォルト順序を使用します");
     return [...DEFAULT_CATEGORIES];
   }
 
@@ -47,9 +47,9 @@
   function saveCategoryOrder(order) {
     try {
       localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
-      console.log("[ExtVars][CatOrder] ストレージに順序を保存しました:", order);
+      //console.log("[ExtVars][CatOrder] ストレージに順序を保存しました:", order);
     } catch (e) {
-      console.warn("[ExtVars][CatOrder] 保存失敗:", e);
+      //console.warn("[ExtVars][CatOrder] 保存失敗:", e);
     }
   }
 
@@ -97,7 +97,7 @@
       if (map?.createVariable) return map.createVariable(name, type || "", id);
       if (ws?.createVariable) return ws.createVariable(name, type || "", id);
       if (Blockly?.Variables?.createVariable) return Blockly.Variables.createVariable(ws, name, type || "", id);
-    } catch(e) { console.warn("[ExtVars] createWorkspaceVariable error:", e); }
+    } catch(e) { /*console.warn("[ExtVars] createWorkspaceVariable error:", e);*/ }
     return null;
   }
 
@@ -113,7 +113,7 @@
         const idx = vs.findIndex(v => getVarId(v) === idOrName || getVarName(v) === idOrName);
         if (idx >= 0) { try { vs.splice(idx,1); return true; } catch(e){} }
       }
-    } catch(e) { console.warn("[ExtVars] deleteWorkspaceVariable error:", e); }
+    } catch(e) { /*console.warn("[ExtVars] deleteWorkspaceVariable error:", e); */}
     return false;
   }
 
@@ -127,7 +127,7 @@
       if (!found && map.getVariable) { try { found = map.getVariable(id) || map.getVariable(getVarName(varObj)); } catch(e){found=null;} }
       if (found) { try { found.name = newName; return true; } catch(e){} }
       if (varObj?.name !== undefined) { varObj.name = newName; return true; }
-    } catch(e) { console.warn("[ExtVars] renameWorkspaceVariable error:", e); }
+    } catch(e) { /*console.warn("[ExtVars] renameWorkspaceVariable error:", e);*/ }
     return false;
   }
 
@@ -154,11 +154,11 @@
                 changed++;
             }
         } catch (e) {
-            console.warn("[ExtVars] Block update error:", e);
+            //console.warn("[ExtVars] Block update error:", e);
         }
     });
 
-    console.log(`[ExtVars] Rename complete: ${changed} blocks updated.`);
+    //console.log(`[ExtVars] Rename complete: ${changed} blocks updated.`);
 
     try {
         const dummyName = "__EXTVARS_DUMMY__";
@@ -170,9 +170,9 @@
             deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
         }
 
-        console.log("[ExtVars] Dummy variable added & deleted to trigger save.");
+        //console.log("[ExtVars] Dummy variable added & deleted to trigger save.");
     } catch (e) {
-        console.warn("[ExtVars] Dummy variable trick failed:", e);
+        //console.warn("[ExtVars] Dummy variable trick failed:", e);
     }
   }
 
@@ -246,9 +246,9 @@ function createID(length = 20) {
     const targetId = getVarId(varDef);
     let count = 0;
 
-    console.log("=====================================================");
-    console.log(`[ExtVars] FULL DEBUG START for variable: "${getVarName(varDef)}" (type: ${getVarType(varDef)})`);
-    console.log("=====================================================");
+    //console.log("=====================================================");
+    //console.log(`[ExtVars] FULL DEBUG START for variable: "${getVarName(varDef)}" (type: ${getVarType(varDef)})`);
+    //console.log("=====================================================");
 
     for (const block of allBlocks) {
         if (!block) continue;
@@ -274,9 +274,9 @@ function createID(length = 20) {
         } catch (e) { console.warn("[ExtVars] Variable count check error:", e); }
     }
 
-    console.log("=====================================================");
-    console.log(`[ExtVars] FINAL COUNT for "${getVarName(varDef)}": ${count}`);
-    console.log("=====================================================");
+    //console.log("=====================================================");
+    //console.log(`[ExtVars] FINAL COUNT for "${getVarName(varDef)}": ${count}`);
+    //console.log("=====================================================");
 
     return count;
   }
@@ -284,31 +284,31 @@ function createID(length = 20) {
   // ---------- reorder variables in internal map ----------
   function reorderVariablesInMap(ws, cat, orderedIds) {
     const map = workspaceGetVariableMap(ws);
-    console.log("==============================================");
-    console.log("[ExtVars][Reorder] ENTER for category:", cat);
+    //console.log("==============================================");
+    //console.log("[ExtVars][Reorder] ENTER for category:", cat);
 
     if (!map) {
-        console.warn("[ExtVars][Reorder] No variable map");
+        //console.warn("[ExtVars][Reorder] No variable map");
         return;
     }
 
     // Portal fork: variables are stored in a Map called `variableMap`
     const vm = map.variableMap;
     if (!vm || typeof vm.get !== "function") {
-        console.warn("[ExtVars][Reorder] variableMap is not a Map:", vm);
+        //console.warn("[ExtVars][Reorder] variableMap is not a Map:", vm);
         return;
     }
 
     const raw = vm.get(cat);
-    console.log("[ExtVars][Reorder] raw array for", cat, "=", raw);
+    //console.log("[ExtVars][Reorder] raw array for", cat, "=", raw);
 
     if (!Array.isArray(raw)) {
-        console.warn("[ExtVars][Reorder] No raw array for category:", cat, "raw:", raw);
-        console.log("==============================================");
+        //console.warn("[ExtVars][Reorder] No raw array for category:", cat, "raw:", raw);
+        //console.log("==============================================");
         return;
     }
 
-    console.log("[ExtVars][Reorder] BEFORE:", raw.map(v => getVarId(v)));
+    //console.log("[ExtVars][Reorder] BEFORE:", raw.map(v => getVarId(v)));
 
     const newArr = [];
 
@@ -321,7 +321,7 @@ function createID(length = 20) {
         if (!newArr.includes(v)) newArr.push(v);
     }
 
-    console.log("[ExtVars][Reorder] AFTER:", newArr.map(v => getVarId(v)));
+    //console.log("[ExtVars][Reorder] AFTER:", newArr.map(v => getVarId(v)));
 
     // Write back into the Map
     vm.set(cat, newArr);
@@ -337,13 +337,13 @@ try {
         deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
     }
 
-    console.log("[ExtVars][Reorder] Dummy variable added & removed to trigger save.");
+    //console.log("[ExtVars][Reorder] Dummy variable added & removed to trigger save.");
 } catch (e) {
-    console.warn("[ExtVars][Reorder] Dummy variable trick failed:", e);
+    //console.warn("[ExtVars][Reorder] Dummy variable trick failed:", e);
 }
 
-    console.log("[ExtVars][Reorder] WRITE COMPLETE");
-    console.log("==============================================");
+    //console.log("[ExtVars][Reorder] WRITE COMPLETE");
+    //console.log("==============================================");
 }
 
   // ---------- inject CSS ----------
@@ -603,7 +603,7 @@ try {
         } else {
           sortMode = "def";
         }
-        console.log("[ExtVars] ソートモード切り替え:", sortMode);
+        //console.log("[ExtVars] ソートモード切り替え:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
@@ -747,9 +747,9 @@ try {
           weight:98
         };
         try{ if(reg.getItem && reg.getItem(item.id)) reg.unregister(item.id); }catch(e){}
-        reg.register(item); console.log("[ExtVars] Registered context menu item via ContextMenuRegistry"); return;
+        reg.register(item); /*console.log("[ExtVars] Registered context menu item via ContextMenuRegistry");*/ return;
       }
-    }catch(e){ console.warn("[ExtVars] ContextMenuRegistry registration failed:",e); }
+    }catch(e){ /*console.warn("[ExtVars] ContextMenuRegistry registration failed:",e);*/ }
 
     (function domFallback(){
       document.addEventListener("contextmenu",()=>{
@@ -762,7 +762,7 @@ try {
     })();
   }
 
-  function initialize(){ registerContextMenuItem(); if(plugin) plugin.openManager=openModal; console.info("[ExtVars] Live Extended Variable Manager initialized (workspace-only)."); }
+  function initialize(){ registerContextMenuItem(); if(plugin) plugin.openManager=openModal; /*console.info("[ExtVars] Live Extended Variable Manager initialized (workspace-only).");*/ }
   setTimeout(initialize,900);
 
   // ---------- safe export of console helpers ----------
