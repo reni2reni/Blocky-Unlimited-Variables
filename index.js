@@ -12,16 +12,15 @@
     }
   } catch (e) { plugin = { id: PLUGIN_ID }; }
 
-  // categories
+  // categories (デフォルト配列とローカルストレージ永続化)
   const DEFAULT_CATEGORIES = [
-    "Global", "AreaTrigger", "CapturePoint", "EmplacementSpawner", "HQ", "InteractPoint", "LootSpawner", "MCOM",
-    "Player", "RingOfFire", "ScreenEffect", "Sector", "SFX", "SpatialObject", "Spawner", "SpawnPoint", "Team",
-    "Vehicle", "VehicleSpawner", "VFX", "VO", "WaypointPath", "WorldIcon"
+    "Global","AreaTrigger","CapturePoint","EmplacementSpawner","HQ","InteractPoint","LootSpawner","MCOM",
+    "Player","RingOfFire","ScreenEffect","Sector","SFX","SpatialObject","Spawner","SpawnPoint","Team",
+    "Vehicle","VehicleSpawner","VFX","VO","WaypointPath","WorldIcon"
   ];
 
   const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
 
-  // 保存された順序を読み込む
   function loadCategoryOrder() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CATS);
@@ -32,24 +31,20 @@
           DEFAULT_CATEGORIES.forEach(c => {
             if (!ordered.includes(c)) ordered.push(c);
           });
-          //console.log("[ExtVars][CatOrder] ストレージから順序を読み込みました:", ordered);
           return ordered;
         }
       }
     } catch (e) {
-      //console.warn("[ExtVars][CatOrder] 読み込み失敗:", e);
+      console.warn("[ExtVars] Failed to load category order:", e);
     }
-    //console.log("[ExtVars][CatOrder] デフォルト順序を使用します");
     return [...DEFAULT_CATEGORIES];
   }
 
-  // カテゴリ順序を保存する
   function saveCategoryOrder(order) {
     try {
       localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
-      //console.log("[ExtVars][CatOrder] ストレージに順序を保存しました:", order);
     } catch (e) {
-      //console.warn("[ExtVars][CatOrder] 保存失敗:", e);
+      console.warn("[ExtVars] Failed to save category order:", e);
     }
   }
 
@@ -97,7 +92,7 @@
       if (map?.createVariable) return map.createVariable(name, type || "", id);
       if (ws?.createVariable) return ws.createVariable(name, type || "", id);
       if (Blockly?.Variables?.createVariable) return Blockly.Variables.createVariable(ws, name, type || "", id);
-    } catch(e) { /*console.warn("[ExtVars] createWorkspaceVariable error:", e);*/ }
+    } catch(e) { console.warn("[ExtVars] createWorkspaceVariable error:", e); }
     return null;
   }
 
@@ -113,7 +108,7 @@
         const idx = vs.findIndex(v => getVarId(v) === idOrName || getVarName(v) === idOrName);
         if (idx >= 0) { try { vs.splice(idx,1); return true; } catch(e){} }
       }
-    } catch(e) { /*console.warn("[ExtVars] deleteWorkspaceVariable error:", e); */}
+    } catch(e) { console.warn("[ExtVars] deleteWorkspaceVariable error:", e); }
     return false;
   }
 
@@ -127,7 +122,7 @@
       if (!found && map.getVariable) { try { found = map.getVariable(id) || map.getVariable(getVarName(varObj)); } catch(e){found=null;} }
       if (found) { try { found.name = newName; return true; } catch(e){} }
       if (varObj?.name !== undefined) { varObj.name = newName; return true; }
-    } catch(e) { /*console.warn("[ExtVars] renameWorkspaceVariable error:", e);*/ }
+    } catch(e) { console.warn("[ExtVars] renameWorkspaceVariable error:", e); }
     return false;
   }
 
@@ -145,8 +140,8 @@
         if (!varField) return;
 
         try {
-            const val = varField.getValue?.();            // variable ID
-            const varObj = ws.getVariableById?.(val);     // lookup variable from ID
+            const val = varField.getValue?.();
+            const varObj = ws.getVariableById?.(val);
 
             if (varObj && varObj.name === newName) {
                 varField.setValue(val);
@@ -154,80 +149,66 @@
                 changed++;
             }
         } catch (e) {
-            //console.warn("[ExtVars] Block update error:", e);
+            console.warn("[ExtVars] Block update error:", e);
         }
     });
-
-    //console.log(`[ExtVars] Rename complete: ${changed} blocks updated.`);
 
     try {
         const dummyName = "__EXTVARS_DUMMY__";
         const dummyId = "EXTVARS_DUMMY_" + Date.now();
-
         const dummyVar = createWorkspaceVariable(ws, dummyName, "Global", dummyId);
-
         if (dummyVar) {
             deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
         }
-
-        //console.log("[ExtVars] Dummy variable added & deleted to trigger save.");
     } catch (e) {
-        //console.warn("[ExtVars] Dummy variable trick failed:", e);
+        console.warn("[ExtVars] Dummy variable trick failed:", e);
     }
   }
 
-function createID(length = 20) {
-  // SAFE character set (no symbols)
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-+%@^!=";
-
-  function generateId() {
-    let result = "";
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+  function createID(length = 20) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-+%@^!=";
+    function generateId() {
+      let result = "";
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
     }
-    return result;
+    try {
+      const ws = getMainWorkspaceSafe();
+      const vars = workspaceGetVariables(ws);
+      const existingIds = new Set(
+        vars.map(v => getVarId(v)).filter(id => typeof id === "string")
+      );
+      let newId;
+      do {
+        newId = generateId();
+      } while (existingIds.has(newId));
+      return newId;
+    } catch (e) {
+      return generateId();
+    }
   }
-
-  try {
-    const ws = getMainWorkspaceSafe();
-    const vars = workspaceGetVariables(ws);
-
-    const existingIds = new Set(
-      vars.map(v => getVarId(v)).filter(id => typeof id === "string")
-    );
-
-    let newId;
-    do {
-      newId = generateId();
-    } while (existingIds.has(newId));
-
-    return newId;
-
-  } catch (e) {
-    return generateId();
-  }
-}
 
   // ---------- live registry ----------
   function getLiveRegistry() {
     const ws = getMainWorkspaceSafe();
     const live = {};
-    for (const c of CATEGORIES) live[c]=[];
+    for (const c of CATEGORIES) live[c] = [];
     try {
       const vars = workspaceGetVariables(ws);
       for (const v of vars) {
         const id = getVarId(v);
         const name = getVarName(v);
         const type = getVarType(v) || "Global";
-        const cat = (typeof type==="string") ? type : "Global";
-        if (!live[cat]) live[cat]=[];
-        live[cat].push({ id, name, type, _raw:v });
+        const cat = (typeof type === "string") ? type : "Global";
+        if (!live[cat]) live[cat] = [];
+        live[cat].push({ id, name, type, _raw: v });
       }
     } catch(e){}
     return live;
   }
 
-  // ---------- check nested ----------
   function isNestedInside(block, parent) {
     if (!parent || !parent.inputList) return false;
     for (const input of parent.inputList) {
@@ -239,23 +220,16 @@ function createID(length = 20) {
     return false;
   }
 
-  // ---------- COUNT USAGE ----------
   function countVariableUsage(ws, varDef) {
     if (!ws || !varDef) return 0;
     const allBlocks = ws.getAllBlocks ? ws.getAllBlocks() : [];
     const targetId = getVarId(varDef);
     let count = 0;
 
-    //console.log("=====================================================");
-    //console.log(`[ExtVars] FULL DEBUG START for variable: "${getVarName(varDef)}" (type: ${getVarType(varDef)})`);
-    //console.log("=====================================================");
-
     for (const block of allBlocks) {
         if (!block) continue;
-
         const varField = block.getField && block.getField("VAR");
         if (!varField) continue;
-
         try {
             const val = varField.getValue?.();
             if (val === targetId) {
@@ -264,30 +238,17 @@ function createID(length = 20) {
                     if (parent === block) continue;
                     if (isNestedInside(block, parent)) { nested = true; break; }
                 }
-                if (!nested) {
-                    count++;
-                    //console.log(`• COUNTED block: ${block.type} (id=${block.id})`);
-                } else {
-                    //console.log(`• SKIPPED nested block: ${block.type} (id=${block.id})`);
-                }
+                if (!nested) count++;
             }
-        } catch (e) { /*console.warn("[ExtVars] Variable count check error:", e);*/ }
+        } catch (e) {}
     }
-
-    //console.log("=====================================================");
-    //console.log(`[ExtVars] FINAL COUNT for "${getVarName(varDef)}": ${count}`);
-    //console.log("=====================================================");
-
     return count;
   }
 
-  // ---------- reorder variables in internal map ----------
+  // ---------- 変数マップ内の登録順序を最初から再登録し直す ----------
   function reorderVariablesInMap(ws, cat, orderedIds) {
     const map = workspaceGetVariableMap(ws);
-    if (!map) {
-      //console.warn("[ExtVars][Reorder] No variable map");
-      return;
-    }
+    if (!map) return;
 
     const vm = map.variableMap;
     if (!vm || typeof vm.get !== "function") return;
@@ -295,15 +256,11 @@ function createID(length = 20) {
     const raw = vm.get(cat);
     if (!Array.isArray(raw)) return;
 
-    //console.log(`[ExtVars][Reorder] カテゴリ「${cat}」の内部登録順を再構築します`);
-
-    // 1. 既存の変数オブジェクト（ID・参照）を一時退避
     const varMap = new Map();
     for (const v of raw) {
       varMap.set(getVarId(v), v);
     }
 
-    // 2. 指定された新しい順番で配列を作成
     const newArr = [];
     for (const id of orderedIds) {
       if (varMap.has(id)) {
@@ -311,21 +268,17 @@ function createID(length = 20) {
         varMap.delete(id);
       }
     }
-    // 漏れがある場合は末尾に追加
     for (const v of varMap.values()) {
       newArr.push(v);
     }
 
-    // 3. 内部配列を一旦空にし、上から順に再登録
     raw.length = 0;
     for (const v of newArr) {
       raw.push(v);
     }
 
-    // 4. Mapに確実に再セット
     vm.set(cat, raw);
 
-    // 5. Portalのセーブ検知とドロップダウン更新をトリガー
     try {
       const dummyName = "__EXTVARS_ORDER_DUMMY__";
       const dummyId = "EXTVARS_ORDER_DUMMY_" + Date.now();
@@ -333,11 +286,7 @@ function createID(length = 20) {
       if (dummyVar) {
         deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
       }
-    } catch (e) {
-      //console.warn("[ExtVars][Reorder] Dummy variable trick failed:", e);
-    }
-
-    //console.log("[ExtVars][Reorder] 再登録完了");
+    } catch (e) {}
   }
 
   // ---------- inject CSS ----------
@@ -348,50 +297,57 @@ function createID(length = 20) {
       .ev-modal{width:min(1100px,94vw);height:min(760px,90vh);background:#1e1e1e;border-radius:10px;padding:14px;display:flex;flex-direction:column;color:#e9eef2;font-family:Inter,Arial,sans-serif;box-shadow:0 12px 48px rgba(0,0,0,0.75)}
       .ev-content{display:flex;gap:12px;flex:1;overflow:hidden}
       .ev-cats{width:240px;background:#000000;border-radius:8px;padding:10px;overflow-y:auto}
-      .ev-cat{padding:8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#171717;color:#e9eef2;margin-bottom:6px;transition:background 0.15s ease,transform 0.15s ease}
+      .ev-cat{padding:8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#171717;color:#e9eef2;margin-bottom:6px;transition:background 0.15s ease,transform 0.15s ease;user-select:none;position:relative}
       .ev-cat:hover{background:#434343;transform:translateX(1px)}
       .ev-cat.selected{background:#6e0000;border-left:4px solid #ff0a03}
+      .ev-cat.dragging{opacity:0.4;background:#333}
+      .ev-cat-left{display:flex;align-items:center;gap:8px}
       .ev-list{flex:1;background:#000000;border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;overflow-anchor:none}
-      .ev-row{display:flex;justify-content:space-between;align-items:center;padding: 2px 8px;background:#171717;border-radius:6px;margin-bottom:8px;transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.15s ease}
+      .ev-row{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#171717;border-radius:6px;margin-bottom:8px;transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.15s ease}
       .ev-row.dragging{opacity:0.9;background:#252525;box-shadow:0 8px 24px rgba(0,0,0,0.6);transform:scale(1.01)}
       .ev-btn{padding:6px 10px;border-radius:6px;border:none;color:#fff;cursor:pointer}
       .ev-add{background:#008a00}
       .ev-edit{background:#3a3a3a}
       .ev-del{background:#8a0000}
       .ev-muted{color:#cdcdcd;font-size:14px}
-      .ev-details{width:320px;background:#121214;border-radius:8px;padding:10px;overflow:auto}
-      .ev-input{width:100%;padding:8px;border-radius:6px;border:1px solid #222;background:#0b0b0c;color:#e9eef2;margin-bottom:8px}
-      .ev-actions{display:flex;justify-content:flex-end;margin-top:10px;gap:8px}
       .ev-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
       .ev-title{font-weight:700;font-size:24px}
-
       .ev-row-left{display:flex;align-items:center;gap:8px}
       .ev-drag-handle{width:16px;height:16px;cursor:grab;display:flex;align-items:center;justify-content:center;color:#aaaaaa;font-size:14px;flex-shrink:0;user-select:none}
       .ev-drag-handle::before{content:"⋮⋮";line-height:1}
       .ev-row.dragging .ev-drag-handle{cursor:grabbing;color:#ffffff}
-       .ev-cat{user-select:none;position:relative}
-      .ev-cat.dragging{opacity:0.4;background:#333}
-      .ev-cat-left{display:flex;align-items:center;gap:8px}
-      .ev-sort-btn{background:#2a2a2a;border:1px solid #444;font-size:12px;padding:3px 8px;margin-left:8px;border-radius:4px;cursor:pointer}
-      .ev-sort-btn:hover{background:#3a3a3a}
-      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:320px}
-      .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:20px;box-sizing:border-box;outline:none}
+      /* 独自入力ポップアップ (幅2倍の440px) */
+      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:440px}
+      .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:14px;box-sizing:border-box;outline:none}
       .ev-prompt-input:focus{border-color:#008a00}
       .ev-prompt-btns{display:flex;justify-content:flex-end;gap:6px}
     `;
     document.head.appendChild(style);
   })();
 
-  // ---------- modal ----------
-  
-  let modalOverlay = null;
-  function removeModal() { if (modalOverlay) { try { modalOverlay.remove(); } catch (e) { } modalOverlay = null; } }
+  // ---------- 実際の並び順判定ヘルパー ----------
+  function detectListSortMode(vars) {
+    if (!vars || vars.length < 2) return "def";
+    let isAsc = true;
+    let isDesc = true;
+    for (let i = 0; i < vars.length - 1; i++) {
+      const cmp = (vars[i].name || "").localeCompare(vars[i + 1].name || "");
+      if (cmp > 0) isAsc = false;
+      if (cmp < 0) isDesc = false;
+    }
+    if (isAsc) return "asc";
+    if (isDesc) return "desc";
+    return "def";
+  }
 
-  // 独自入力ポップアップの表示ヘルパー
+  // カテゴリごとのフィルター状態を保持
+  const categorySortMap = {};
+
+  // ---------- 独自入力ポップアップ ----------
   let currentPrompt = null;
   function removePrompt() {
     if (currentPrompt) {
-      try { currentPrompt.remove(); } catch (e) { }
+      try { currentPrompt.remove(); } catch (e) {}
       currentPrompt = null;
     }
   }
@@ -402,13 +358,11 @@ function createID(length = 20) {
     const pop = document.createElement("div");
     pop.className = "ev-prompt-popover";
 
-    // 入力欄 [                     ]
     const input = document.createElement("input");
     input.type = "text";
     input.className = "ev-prompt-input";
     input.value = initialValue || "";
 
-    // ボタン欄 [OK][CANCEL]
     const btnRow = document.createElement("div");
     btnRow.className = "ev-prompt-btns";
 
@@ -430,21 +384,18 @@ function createID(length = 20) {
     document.body.appendChild(pop);
     currentPrompt = pop;
 
-    // マウスカーソルの左側に配置 (画面外にはみ出ないよう調整)
-    const popWidth = 330;
+    const popWidth = 450;
     let leftPos = x - popWidth - 10;
-    if (leftPos < 10) leftPos = x + 15; // 画面左端を超えるなら右側に表示
+    if (leftPos < 10) leftPos = x + 15;
     let topPos = y - 20;
     if (topPos + 90 > window.innerHeight) topPos = window.innerHeight - 95;
 
     pop.style.left = `${leftPos}px`;
     pop.style.top = `${topPos}px`;
 
-    // フォーカス＆全選択（上書き・編集を即座にしやすくする）
     input.focus();
     input.select();
 
-    // アクション処理
     const doConfirm = () => {
       const val = input.value.trim();
       if (val) {
@@ -461,7 +412,6 @@ function createID(length = 20) {
       else if (e.key === "Escape") { e.preventDefault(); removePrompt(); }
     };
 
-    // ポップアップ外をクリックしたら閉じる
     setTimeout(() => {
       const outsideClick = (e) => {
         if (!pop.contains(e.target)) {
@@ -473,60 +423,65 @@ function createID(length = 20) {
     }, 50);
   }
 
+  // ---------- modal (単一定義) ----------
+  let modalOverlay = null;
+  function removeModal() {
+    if (modalOverlay) {
+      try { modalOverlay.remove(); } catch (e) {}
+      modalOverlay = null;
+    }
+  }
+
   function openModal() {
     removeModal();
     removePrompt();
-    CATEGORIES = loadCategoryOrder(); // 起動時に最新の順序を復元
+    CATEGORIES = loadCategoryOrder();
     const ws = getMainWorkspaceSafe();
     const live = getLiveRegistry();
 
-    modalOverlay = document.createElement("div");
+    modalOverlay = document.createElement("div"); 
     modalOverlay.className = "ev-overlay";
-    const modal = document.createElement("div");
-    modal.className = "ev-modal";
+    const modal = document.createElement("div"); 
+    modal.className = "ev-modal"; 
     modalOverlay.appendChild(modal);
 
-    const top = document.createElement("div");
+    const top = document.createElement("div"); 
     top.className = "ev-top";
-    const title = document.createElement("div");
-    title.className = "ev-title";
-    title.innerText = "Advanced Variable Manager";
+    const title = document.createElement("div"); 
+    title.className = "ev-title"; 
+    title.innerText = "Advanced Variable Manager"; 
     top.appendChild(title);
 
-    const topActions = document.createElement("div");
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "ev-btn ev-del";
-    closeBtn.innerText = "Close";
-    closeBtn.onclick = () => removeModal();
-    topActions.appendChild(closeBtn);
-    top.appendChild(topActions);
+    const topActions = document.createElement("div"); 
+    const closeBtn = document.createElement("button"); 
+    closeBtn.className = "ev-btn ev-del"; 
+    closeBtn.innerText = "Close"; 
+    closeBtn.onclick = () => removeModal(); 
+    topActions.appendChild(closeBtn); 
+    top.appendChild(topActions); 
     modal.appendChild(top);
 
-    const content = document.createElement("div");
-    content.className = "ev-content";
+    const content = document.createElement("div"); 
+    content.className = "ev-content"; 
     modal.appendChild(content);
 
-    const left = document.createElement("div");
+    const left = document.createElement("div"); 
     left.className = "ev-cats";
-    const center = document.createElement("div");
+    const center = document.createElement("div"); 
     center.className = "ev-list";
 
-    content.appendChild(left);
+    content.appendChild(left); 
     content.appendChild(center);
 
     let currentCategory = CATEGORIES[0] || "Global";
 
-    // モーダル起動時の初期順序(DEF)を記録
     const defaultOrderMap = {};
     for (const c of CATEGORIES) {
       defaultOrderMap[c] = (live[c] || []).map(v => v.id);
     }
-    let sortMode = "def"; // "def" | "asc" | "desc"
-    const categoryScrollMap = {}; // ★ カテゴリごとのスクロール位置を記憶
 
-    // ==========================================
-    // 左側：カテゴリ一覧のドラッグ並び替え
-    // ==========================================
+    const categoryScrollMap = {};
+
     function initCatDnD() {
       left.ondragover = (ev) => {
         ev.preventDefault();
@@ -550,9 +505,6 @@ function createID(length = 20) {
       };
     }
 
-    // ==========================================
-    // 左側：カテゴリ一覧の再描画
-    // ==========================================
     function rebuildCategories() {
       left.innerHTML = "";
       const fresh = getLiveRegistry();
@@ -560,14 +512,13 @@ function createID(length = 20) {
       initCatDnD();
 
       for (const cat of CATEGORIES) {
-        const el = document.createElement("div");
+        const el = document.createElement("div"); 
         el.className = "ev-cat";
         el.dataset.catName = cat;
         if (cat === currentCategory) el.classList.add("selected");
 
         const count = (live[cat] || []).length;
 
-        // タグ（ドラッグハンドル）＋カテゴリ名
         const leftWrap = document.createElement("div");
         leftWrap.className = "ev-cat-left";
 
@@ -589,18 +540,14 @@ function createID(length = 20) {
         el.appendChild(leftWrap);
         el.appendChild(countSpan);
 
-        // カテゴリ切り替えクリック
         el.onclick = (e) => {
           if (e.target === handle) return;
-          categoryScrollMap[currentCategory] = center.scrollTop; // ★ 切り替え前のスクロール位置を記憶
+          categoryScrollMap[currentCategory] = center.scrollTop;
           currentCategory = cat;
-          sortMode = "def";
           rebuildCategories();
           rebuildList();
         };
 
-
-        // ドラッグ処理
         handle.onmousedown = () => { el.setAttribute("draggable", "true"); };
         handle.onmouseup = () => { el.removeAttribute("draggable"); };
 
@@ -619,9 +566,6 @@ function createID(length = 20) {
       }
     }
 
-    // ==========================================
-    // 右側：変数のドラッグ移動
-    // ==========================================
     function initDnDIfNeeded() {
       center.ondragover = (ev) => {
         ev.preventDefault();
@@ -638,28 +582,32 @@ function createID(length = 20) {
         ev.preventDefault();
         const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
         defaultOrderMap[currentCategory] = [...newOrder];
-        sortMode = "def";
+        categorySortMap[currentCategory] = "def";
         reorderVariablesInMap(ws, currentCategory, newOrder);
         rebuildCategories();
         rebuildList();
       };
     }
 
-    // ==========================================
-    // 右側：変数一覧の再描画
-    // ==========================================
     function rebuildList() {
-      const fresh = getLiveRegistry();
+      const fresh = getLiveRegistry(); 
       Object.assign(live, fresh);
       center.innerHTML = "";
       center.scrollTop = 0;
       initDnDIfNeeded();
 
-      // ヘッダーコンテナ
-      const header = document.createElement("div");
-      header.style.display = "flex";
-      header.style.justifyContent = "space-between";
-      header.style.alignItems = "center";
+      const currentVars = live[currentCategory] || [];
+
+      if (!categorySortMap[currentCategory]) {
+        categorySortMap[currentCategory] = detectListSortMode(currentVars);
+      }
+      let sortMode = categorySortMap[currentCategory];
+
+      // 固定ヘッダー
+      const header = document.createElement("div"); 
+      header.style.display = "flex"; 
+      header.style.justifyContent = "space-between"; 
+      header.style.alignItems = "center"; 
       header.style.position = "sticky";
       header.style.top = "-10px";
       header.style.background = "#000000";
@@ -667,17 +615,15 @@ function createID(length = 20) {
       header.style.padding = "6px 0 10px 0";
       header.style.marginBottom = "4px";
 
-      // 左側：タイトル ＋ 並び替えボタン
       const leftHeader = document.createElement("div");
       leftHeader.style.display = "flex";
       leftHeader.style.alignItems = "center";
       leftHeader.style.gap = "8px";
 
-      const h = document.createElement("div");
-      h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
+      const h = document.createElement("div"); 
+      h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${currentVars.length}</span>`; 
       leftHeader.appendChild(h);
 
-      // 並び替えボタン
       const sortBtn = document.createElement("button");
       sortBtn.className = "ev-btn";
       sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
@@ -690,22 +636,23 @@ function createID(length = 20) {
         sortBtn.innerText = "[ DEF ]";
       }
 
-      // ★ ボタンクリックで実際に内部の登録順番を再構築する
       sortBtn.onclick = (e) => {
         e.stopPropagation();
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
         else sortMode = "def";
 
-        let currentVars = [...(live[currentCategory] || [])];
-        if (currentVars.length > 0) {
+        categorySortMap[currentCategory] = sortMode;
+
+        let workingList = [...(live[currentCategory] || [])];
+        if (workingList.length > 0) {
           if (sortMode === "asc") {
-            currentVars.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+            workingList.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
           } else if (sortMode === "desc") {
-            currentVars.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+            workingList.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
           } else {
             const defIds = defaultOrderMap[currentCategory] || [];
-            currentVars.sort((a, b) => {
+            workingList.sort((a, b) => {
               const idxA = defIds.indexOf(a.id);
               const idxB = defIds.indexOf(b.id);
               if (idxA === -1) return 1;
@@ -714,8 +661,7 @@ function createID(length = 20) {
             });
           }
 
-          // 内部登録順を上から再構築
-          const sortedIds = currentVars.map(v => v.id);
+          const sortedIds = workingList.map(v => v.id);
           reorderVariablesInMap(ws, currentCategory, sortedIds);
         }
 
@@ -725,10 +671,9 @@ function createID(length = 20) {
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // 右側：Addボタン
-      const addBtn = document.createElement("button");
-      addBtn.className = "ev-btn ev-add";
-      addBtn.innerText = "Add";
+      const addBtn = document.createElement("button"); 
+      addBtn.className = "ev-btn ev-add"; 
+      addBtn.innerText = "Add"; 
       addBtn.onclick = (e) => {
         e.stopPropagation();
         showInlinePrompt(e.clientX, e.clientY, "", (name) => {
@@ -736,30 +681,28 @@ function createID(length = 20) {
           createWorkspaceVariable(ws, name, currentCategory, id);
           if (!defaultOrderMap[currentCategory]) defaultOrderMap[currentCategory] = [];
           defaultOrderMap[currentCategory].push(id);
-          rebuildCategories();
+          rebuildCategories(); 
           rebuildList();
         });
       };
-      header.appendChild(addBtn);
+      header.appendChild(addBtn); 
       center.appendChild(header);
 
-      // 変数リストの取得
-      let arr = [...(live[currentCategory] || [])];
-      if (arr.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "ev-muted";
-        empty.innerText = "(no variables)";
-        center.appendChild(empty);
-        return;
+      let arr = [...currentVars];
+      if (arr.length === 0) { 
+        const empty = document.createElement("div"); 
+        empty.className = "ev-muted"; 
+        empty.innerText = "(no variables)"; 
+        center.appendChild(empty); 
+        return; 
       }
 
-      // 各行の作成
       arr.forEach((v) => {
-        const row = document.createElement("div");
+        const row = document.createElement("div"); 
         row.className = "ev-row";
         row.dataset.varId = v.id;
 
-        const leftCol = document.createElement("div");
+        const leftCol = document.createElement("div"); 
         leftCol.className = "ev-row-left";
 
         const dragHandle = document.createElement("div");
@@ -777,10 +720,10 @@ function createID(length = 20) {
 
         const rightCol = document.createElement("div");
 
-        const editBtn = document.createElement("button");
-        editBtn.className = "ev-btn ev-edit";
-        editBtn.style.marginRight = "6px";
-        editBtn.innerText = "Edit";
+        const editBtn = document.createElement("button"); 
+        editBtn.className = "ev-btn ev-edit"; 
+        editBtn.style.marginRight = "6px"; 
+        editBtn.innerText = "Edit"; 
         editBtn.onclick = (e) => {
           e.stopPropagation();
           showInlinePrompt(e.clientX, e.clientY, v.name, (newName) => {
@@ -791,25 +734,24 @@ function createID(length = 20) {
             rebuildList();
           });
         };
-
-        const delBtn = document.createElement("button");
-        delBtn.className = "ev-btn ev-del";
-        delBtn.innerText = "Delete";
+      
+        const delBtn = document.createElement("button"); 
+        delBtn.className = "ev-btn ev-del"; 
+        delBtn.innerText = "Delete"; 
         delBtn.onclick = () => {
           if (!confirm(`Delete variable "${v.name}"? This may break blocks referencing it.`)) return;
           deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
-          rebuildCategories();
+          rebuildCategories(); 
           rebuildList();
         };
 
-        rightCol.appendChild(editBtn);
-        rightCol.appendChild(delBtn);
+        rightCol.appendChild(editBtn); 
+        rightCol.appendChild(delBtn); 
 
-        row.appendChild(leftCol);
-        row.appendChild(rightCol);
+        row.appendChild(leftCol); 
+        row.appendChild(rightCol); 
         center.appendChild(row);
 
-        // 変数のDnDイベント
         dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
         dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
 
@@ -825,19 +767,17 @@ function createID(length = 20) {
         };
       });
 
-      // スクロール位置復元
       const targetScroll = categoryScrollMap[currentCategory] || 0;
       setTimeout(() => {
         center.scrollTop = targetScroll;
       }, 0);
     }
 
-    rebuildCategories();
+    rebuildCategories(); 
     rebuildList();
     modalOverlay.addEventListener("click", (ev) => { if (ev.target === modalOverlay) removeModal(); });
     document.body.appendChild(modalOverlay);
   }
-
 
   // ---------- context menu ----------
   function registerContextMenuItem(){
@@ -855,9 +795,10 @@ function createID(length = 20) {
           weight:98
         };
         try{ if(reg.getItem && reg.getItem(item.id)) reg.unregister(item.id); }catch(e){}
-        reg.register(item); /*console.log("[ExtVars] Registered context menu item via ContextMenuRegistry");*/ return;
+        reg.register(item);
+        return;
       }
-    }catch(e){ /*console.warn("[ExtVars] ContextMenuRegistry registration failed:",e);*/ }
+    }catch(e){}
 
     (function domFallback(){
       document.addEventListener("contextmenu",()=>{
@@ -870,8 +811,12 @@ function createID(length = 20) {
     })();
   }
 
-  function initialize(){ registerContextMenuItem(); if(plugin) plugin.openManager=openModal; /*console.info("[ExtVars] Live Extended Variable Manager initialized (workspace-only).");*/ }
-  setTimeout(initialize,900);
+  function initialize(){ 
+    registerContextMenuItem(); 
+    if(plugin) plugin.openManager=openModal; 
+    console.info("[ExtVars] Live Extended Variable Manager initialized (workspace-only)."); 
+  }
+  setTimeout(initialize, 900);
 
   // ---------- safe export of console helpers ----------
   window._getMainWorkspaceSafe = getMainWorkspaceSafe;
