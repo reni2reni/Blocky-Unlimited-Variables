@@ -20,6 +20,7 @@
   ];
 
   const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
+  const STORAGE_KEY_DEF_ORDER = "bf-portal-extvars-def-order"; // ★ DEF順序専用の保存キー
 
   function loadCategoryOrder() {
     try {
@@ -34,18 +35,29 @@
           return ordered;
         }
       }
-    } catch (e) {
-      console.warn("[ExtVars] Failed to load category order:", e);
-    }
+    } catch (e) {}
     return [...DEFAULT_CATEGORIES];
   }
 
   function saveCategoryOrder(order) {
     try {
       localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
-    } catch (e) {
-      console.warn("[ExtVars] Failed to save category order:", e);
-    }
+    } catch (e) {}
+  }
+
+  // ★ DEF(手動順序)の読み込みと保存ヘルパー
+  function loadDefOrderMap() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DEF_ORDER);
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {};
+  }
+
+  function saveDefOrderMap(map) {
+    try {
+      localStorage.setItem(STORAGE_KEY_DEF_ORDER, JSON.stringify(map));
+    } catch(e) {}
   }
 
   let CATEGORIES = loadCategoryOrder();
@@ -129,28 +141,22 @@
   // ---------- update blocks after rename ----------
   function updateBlocksForVariableRename(oldName, newName, ws) {
     if (!ws) return;
-
     const allBlocks = ws.getAllBlocks(false);
     let changed = 0;
 
     allBlocks.forEach(block => {
         if (!block) return;
-
         const varField = block.getField && block.getField("VAR");
         if (!varField) return;
-
         try {
             const val = varField.getValue?.();
             const varObj = ws.getVariableById?.(val);
-
             if (varObj && varObj.name === newName) {
                 varField.setValue(val);
                 block.render?.();
                 changed++;
             }
-        } catch (e) {
-            console.warn("[ExtVars] Block update error:", e);
-        }
+        } catch (e) {}
     });
 
     try {
@@ -160,9 +166,7 @@
         if (dummyVar) {
             deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
         }
-    } catch (e) {
-        console.warn("[ExtVars] Dummy variable trick failed:", e);
-    }
+    } catch (e) {}
   }
 
   function createID(length = 20) {
@@ -316,7 +320,6 @@
       .ev-drag-handle{width:16px;height:16px;cursor:grab;display:flex;align-items:center;justify-content:center;color:#aaaaaa;font-size:14px;flex-shrink:0;user-select:none}
       .ev-drag-handle::before{content:"⋮⋮";line-height:1}
       .ev-row.dragging .ev-drag-handle{cursor:grabbing;color:#ffffff}
-      /* 独自入力ポップアップ (幅2倍の440px) */
       .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:440px}
       .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:14px;box-sizing:border-box;outline:none}
       .ev-prompt-input:focus{border-color:#008a00}
@@ -325,22 +328,6 @@
     document.head.appendChild(style);
   })();
 
-  // ---------- 実際の並び順判定ヘルパー ----------
-  function detectListSortMode(vars) {
-    if (!vars || vars.length < 2) return "def";
-    let isAsc = true;
-    let isDesc = true;
-    for (let i = 0; i < vars.length - 1; i++) {
-      const cmp = (vars[i].name || "").localeCompare(vars[i + 1].name || "");
-      if (cmp > 0) isAsc = false;
-      if (cmp < 0) isDesc = false;
-    }
-    if (isAsc) return "asc";
-    if (isDesc) return "desc";
-    return "def";
-  }
-
-  // カテゴリごとのフィルター状態を保持
   const categorySortMap = {};
 
   // ---------- 独自入力ポップアップ ----------
@@ -423,7 +410,7 @@
     }, 50);
   }
 
-  // ---------- modal (単一定義) ----------
+  // ---------- modal ----------
   let modalOverlay = null;
   function removeModal() {
     if (modalOverlay) {
@@ -475,10 +462,23 @@
 
     let currentCategory = CATEGORIES[0] || "Global";
 
-    const defaultOrderMap = {};
+    // ★ 永久保存されたDEF(手動順序)マップをロード
+    const defOrderMap = loadDefOrderMap();
     for (const c of CATEGORIES) {
-      defaultOrderMap[c] = (live[c] || []).map(v => v.id);
+      const currentIds = (live[c] || []).map(v => v.id);
+      if (!defOrderMap[c] || defOrderMap[c].length === 0) {
+        // まだ保存がなければ現在の順序を初期DEFとして記憶
+        defOrderMap[c] = [...currentIds];
+      } else {
+        // 既存のDEF順に存在しない新規変数があれば末尾に追加
+        currentIds.forEach(id => {
+          if (!defOrderMap[c].includes(id)) defOrderMap[c].push(id);
+        });
+        // 削除された変数は除外
+        defOrderMap[c] = defOrderMap[c].filter(id => currentIds.includes(id));
+      }
     }
+    saveDefOrderMap(defOrderMap);
 
     const categoryScrollMap = {};
 
@@ -581,7 +581,10 @@
       center.ondrop = (ev) => {
         ev.preventDefault();
         const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
-        defaultOrderMap[currentCategory] = [...newOrder];
+        // ★ 手動でドラッグした順序を「新しいDEF順序」として永久保存！
+        defOrderMap[currentCategory] = [...newOrder];
+        saveDefOrderMap(defOrderMap);
+
         categorySortMap[currentCategory] = "def";
         reorderVariablesInMap(ws, currentCategory, newOrder);
         rebuildCategories();
@@ -597,13 +600,9 @@
       initDnDIfNeeded();
 
       const currentVars = live[currentCategory] || [];
+      let sortMode = categorySortMap[currentCategory] || "def";
 
-      if (!categorySortMap[currentCategory]) {
-        categorySortMap[currentCategory] = detectListSortMode(currentVars);
-      }
-      let sortMode = categorySortMap[currentCategory];
-
-      // 固定ヘッダー
+      // ヘッダー
       const header = document.createElement("div"); 
       header.style.display = "flex"; 
       header.style.justifyContent = "space-between"; 
@@ -636,6 +635,7 @@
         sortBtn.innerText = "[ DEF ]";
       }
 
+      // ★ ボタンクリック時の処理（DEF順序を絶対に失わない）
       sortBtn.onclick = (e) => {
         e.stopPropagation();
         if (sortMode === "def") sortMode = "asc";
@@ -645,24 +645,30 @@
         categorySortMap[currentCategory] = sortMode;
 
         let workingList = [...(live[currentCategory] || [])];
+        let targetIds = [];
+
         if (workingList.length > 0) {
           if (sortMode === "asc") {
             workingList.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+            targetIds = workingList.map(v => v.id);
           } else if (sortMode === "desc") {
             workingList.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+            targetIds = workingList.map(v => v.id);
           } else {
-            const defIds = defaultOrderMap[currentCategory] || [];
+            // ★ [ DEF ] の時は、永久保存してある手動DEF順序を取り出して復元！
+            const savedDefIds = defOrderMap[currentCategory] || [];
             workingList.sort((a, b) => {
-              const idxA = defIds.indexOf(a.id);
-              const idxB = defIds.indexOf(b.id);
+              const idxA = savedDefIds.indexOf(a.id);
+              const idxB = savedDefIds.indexOf(b.id);
               if (idxA === -1) return 1;
               if (idxB === -1) return -1;
               return idxA - idxB;
             });
+            targetIds = workingList.map(v => v.id);
           }
 
-          const sortedIds = workingList.map(v => v.id);
-          reorderVariablesInMap(ws, currentCategory, sortedIds);
+          // 内部登録順を指定順で再登録
+          reorderVariablesInMap(ws, currentCategory, targetIds);
         }
 
         rebuildCategories();
@@ -679,8 +685,9 @@
         showInlinePrompt(e.clientX, e.clientY, "", (name) => {
           const id = createID();
           createWorkspaceVariable(ws, name, currentCategory, id);
-          if (!defaultOrderMap[currentCategory]) defaultOrderMap[currentCategory] = [];
-          defaultOrderMap[currentCategory].push(id);
+          if (!defOrderMap[currentCategory]) defOrderMap[currentCategory] = [];
+          defOrderMap[currentCategory].push(id);
+          saveDefOrderMap(defOrderMap);
           rebuildCategories(); 
           rebuildList();
         });
@@ -741,6 +748,10 @@
         delBtn.onclick = () => {
           if (!confirm(`Delete variable "${v.name}"? This may break blocks referencing it.`)) return;
           deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
+          if (defOrderMap[currentCategory]) {
+            defOrderMap[currentCategory] = defOrderMap[currentCategory].filter(id => id !== v.id);
+            saveDefOrderMap(defOrderMap);
+          }
           rebuildCategories(); 
           rebuildList();
         };
