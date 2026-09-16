@@ -587,11 +587,11 @@ try {
       sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
       if (sortMode === "asc") {
-        sortBtn.innerText = "並替: [ A → Z ]";
+        sortBtn.innerText = "[ A → Z ]";
       } else if (sortMode === "desc") {
-        sortBtn.innerText = "並替: [ Z → A ]";
+        sortBtn.innerText = "[ Z → A ]";
       } else {
-        sortBtn.innerText = "並替: [ DEF (初期順) ]";
+        sortBtn.innerText = "[ DEF ]";
       }
 
       sortBtn.onclick = (e) => {
