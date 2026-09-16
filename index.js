@@ -430,8 +430,13 @@ try {
     content.appendChild(center);
 
     let currentCategory = CATEGORIES[0];
-    // ソートモード: "def" (デフォルト) -> "asc" (A-Z) -> "desc" (Z-A)
-    let sortMode = "def";
+
+    // ★ モーダルを開いた時点の「元々の並び順 (DEF)」を記憶
+    const defaultOrderMap = {};
+    for (const c of CATEGORIES) {
+      defaultOrderMap[c] = (live[c] || []).map(v => v.id);
+    }
+    let sortMode = "def"; // "def" -> "asc" -> "desc"
 
     // ==========================================
     // 左側：カテゴリ一覧の再描画 ＆ ドラッグ移動
@@ -498,8 +503,9 @@ try {
         // クリックでカテゴリ切り替え（ハンドル操作時は無視）
         center.ondrop = (ev) => {
           ev.preventDefault();
-          sortMode = "def"; // ★ 手動移動したらDEF順にする
           const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
+          defaultOrderMap[currentCategory] = [...newOrder]; // ★ 手動で並び替えた順を新しいDEF順として記憶
+          sortMode = "def";
           reorderVariablesInMap(ws, currentCategory, newOrder);
           rebuildCategories();
           rebuildList();
@@ -548,9 +554,7 @@ try {
       };
     }
 
-    // ==========================================
-    // 右側：変数一覧の再描画
-    // ==========================================
+
     // ==========================================
     // 右側：変数一覧の再描画 (DEF / A-Z / Z-A 対応)
     // ==========================================
@@ -560,7 +564,7 @@ try {
       center.innerHTML = "";
       initDnDIfNeeded();
 
-      // ヘッダー部コンテナ
+      // ヘッダーコンテナ
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
@@ -577,23 +581,29 @@ try {
       h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
       leftHeader.appendChild(h);
 
-      // ★ 3段階切り替え並び替えボタン
+      // 並び替えボタン (DEF -> A-Z -> Z-A -> DEF)
       const sortBtn = document.createElement("button");
-      sortBtn.className = "ev-btn ev-sort-btn";
-      sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #555; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
+      sortBtn.className = "ev-btn";
+      sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
       if (sortMode === "asc") {
-        sortBtn.innerText = "↓ 名前順 (A-Z)";
+        sortBtn.innerText = "並替: [ A → Z ]";
       } else if (sortMode === "desc") {
-        sortBtn.innerText = "↑ 名前順 (Z-A)";
+        sortBtn.innerText = "並替: [ Z → A ]";
       } else {
-        sortBtn.innerText = "⇅ 並替: DEF";
+        sortBtn.innerText = "並替: [ DEF (初期順) ]";
       }
 
-      sortBtn.onclick = () => {
-        if (sortMode === "def") sortMode = "asc";
-        else if (sortMode === "asc") sortMode = "desc";
-        else sortMode = "def";
+      sortBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (sortMode === "def") {
+          sortMode = "asc";
+        } else if (sortMode === "asc") {
+          sortMode = "desc";
+        } else {
+          sortMode = "def";
+        }
+        console.log("[ExtVars] ソートモード切り替え:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
@@ -624,14 +634,24 @@ try {
         return;
       }
 
-      // ソートモードに応じて配列を並び替え
+      // 3モード並び替えロジック
       if (sortMode === "asc") {
-        arr.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+        arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       } else if (sortMode === "desc") {
-        arr.sort((a, b) => (b.name || "").toLowerCase().localeCompare((a.name || "").toLowerCase()));
+        arr.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+      } else {
+        // DEFモード: 初期記憶順序に復元
+        const defIds = defaultOrderMap[currentCategory] || [];
+        arr.sort((a, b) => {
+          const idxA = defIds.indexOf(a.id);
+          const idxB = defIds.indexOf(b.id);
+          if (idxA === -1) return 1;
+          if (idxB === -1) return -1;
+          return idxA - idxB;
+        });
       }
 
-      // 各行の生成
+      // 各変数行の生成
       arr.forEach((v) => {
         const row = document.createElement("div");
         row.className = "ev-row";
