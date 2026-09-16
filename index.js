@@ -358,7 +358,7 @@ try {
       .ev-cat:hover{background:#434343;transform:translateX(1px)}
       .ev-cat.selected{background:#6e0000;border-left:4px solid #ff0a03}
       .ev-list{flex:1;background:#000000;border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column}
-      .ev-row{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#171717;border-radius:6px;margin-bottom:8px;transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.15s ease}
+      .ev-row{display:flex;justify-content:space-between;align-items:center;padding: 2px 8px;background:#171717;border-radius:6px;margin-bottom:8px;transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.15s ease}
       .ev-row.dragging{opacity:0.9;background:#252525;box-shadow:0 8px 24px rgba(0,0,0,0.6);transform:scale(1.01)}
       .ev-btn{padding:6px 10px;border-radius:6px;border:none;color:#fff;cursor:pointer}
       .ev-add{background:#008a00}
@@ -381,7 +381,7 @@ try {
       .ev-sort-btn{background:#2a2a2a;border:1px solid #444;font-size:12px;padding:3px 8px;margin-left:8px;border-radius:4px;cursor:pointer}
       .ev-sort-btn:hover{background:#3a3a3a}
       .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:320px}
-      .ev-prompt-input{width:100%;padding:4px 4px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:20px;box-sizing:border-box;outline:none}
+      .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:20px;box-sizing:border-box;outline:none}
       .ev-prompt-input:focus{border-color:#008a00}
       .ev-prompt-btns{display:flex;justify-content:flex-end;gap:6px}
     `;
