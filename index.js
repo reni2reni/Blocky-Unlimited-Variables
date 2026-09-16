@@ -657,12 +657,17 @@ try {
       center.innerHTML = "";
       initDnDIfNeeded();
 
-      // ヘッダーコンテナ
+      // ★ スクロールしても常に最上部に固定されるヘッダー
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
-      header.style.marginBottom = "8px";
+      header.style.position = "sticky";
+      header.style.top = "-10px";           // 上端にピッタリ固定
+      header.style.background = "#000000";   // スクロールした行が透けないように背景を黒に
+      header.style.zIndex = "10";           // 変数行より手前に表示
+      header.style.padding = "6px 0 10px 0";
+      header.style.marginBottom = "4px";
 
       // 左側：タイトル ＋ 並び替えボタン
       const leftHeader = document.createElement("div");
@@ -680,9 +685,9 @@ try {
       sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
       if (sortMode === "asc") {
-        sortBtn.innerText = "[ A → Z ]";
+        sortBtn.innerText = " [ A → Z ]";
       } else if (sortMode === "desc") {
-        sortBtn.innerText = "[ Z → A ]";
+        sortBtn.innerText = " [ Z → A ]";
       } else {
         sortBtn.innerText = "[ DEF ]";
       }
@@ -692,12 +697,13 @@ try {
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
         else sortMode = "def";
+        console.log("[ExtVars] ソートモード:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // 右側：Addボタン (独自ポップアップ呼び出し)
+      // 右側：Addボタン
       const addBtn = document.createElement("button");
       addBtn.className = "ev-btn ev-add";
       addBtn.innerText = "Add";
@@ -741,7 +747,7 @@ try {
         });
       }
 
-      // 行の作成
+      // 各行の作成
       arr.forEach((v) => {
         const row = document.createElement("div");
         row.className = "ev-row";
@@ -765,7 +771,6 @@ try {
 
         const rightCol = document.createElement("div");
 
-        // Edit ボタン (独自ポップアップ呼び出し、初期値をセット)
         const editBtn = document.createElement("button");
         editBtn.className = "ev-btn ev-edit";
         editBtn.style.marginRight = "6px";
