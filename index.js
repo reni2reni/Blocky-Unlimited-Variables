@@ -528,6 +528,7 @@ try {
       defaultOrderMap[c] = (live[c] || []).map(v => v.id);
     }
     let sortMode = "def"; // "def" | "asc" | "desc"
+    const categoryScrollMap = {}; // ★ カテゴリごとのスクロール位置を記憶
 
     // ==========================================
     // 左側：カテゴリ一覧のドラッグ並び替え
@@ -597,11 +598,13 @@ try {
         // カテゴリ切り替えクリック
         el.onclick = (e) => {
           if (e.target === handle) return;
+          categoryScrollMap[currentCategory] = center.scrollTop; // ★ 切り替え前のスクロール位置を記憶
           currentCategory = cat;
           sortMode = "def";
           rebuildCategories();
           rebuildList();
         };
+
 
         // ドラッグ処理
         handle.onmousedown = () => { el.setAttribute("draggable", "true"); };
@@ -817,6 +820,9 @@ try {
           row.classList.remove("dragging");
           row.removeAttribute("draggable");
         };
+      });
+      requestAnimationFrame(() => {
+        center.scrollTop = categoryScrollMap[currentCategory] || 0;
       });
     }
 
