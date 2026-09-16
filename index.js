@@ -380,7 +380,7 @@ try {
       .ev-cat-left{display:flex;align-items:center;gap:8px}
       .ev-sort-btn{background:#2a2a2a;border:1px solid #444;font-size:12px;padding:3px 8px;margin-left:8px;border-radius:4px;cursor:pointer}
       .ev-sort-btn:hover{background:#3a3a3a}
-      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:220px}
+      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:440px}
       .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:14px;box-sizing:border-box;outline:none}
       .ev-prompt-input:focus{border-color:#008a00}
       .ev-prompt-btns{display:flex;justify-content:flex-end;gap:6px}
@@ -437,7 +437,7 @@ try {
     currentPrompt = pop;
 
     // マウスカーソルの左側に配置 (画面外にはみ出ないよう調整)
-    const popWidth = 230;
+    const popWidth = 450;
     let leftPos = x - popWidth - 10;
     if (leftPos < 10) leftPos = x + 15; // 画面左端を超えるなら右側に表示
     let topPos = y - 20;
