@@ -357,7 +357,7 @@ try {
       .ev-cat{padding:8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#171717;color:#e9eef2;margin-bottom:6px;transition:background 0.15s ease,transform 0.15s ease}
       .ev-cat:hover{background:#434343;transform:translateX(1px)}
       .ev-cat.selected{background:#6e0000;border-left:4px solid #ff0a03}
-      .ev-list{flex:1;background:#000000;border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column}
+      .ev-list{flex:1;background:#000000;border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;overflow-anchor:none}
       .ev-row{display:flex;justify-content:space-between;align-items:center;padding: 2px 8px;background:#171717;border-radius:6px;margin-bottom:8px;transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.15s ease}
       .ev-row.dragging{opacity:0.9;background:#252525;box-shadow:0 8px 24px rgba(0,0,0,0.6);transform:scale(1.01)}
       .ev-btn{padding:6px 10px;border-radius:6px;border:none;color:#fff;cursor:pointer}
@@ -658,17 +658,18 @@ try {
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
       center.innerHTML = "";
+      center.scrollTop = 0; // ★ 描画開始時に一度トップへ強制リセット
       initDnDIfNeeded();
 
-      // ★ スクロールしても常に最上部に固定されるヘッダー
+      // ヘッダーコンテナ
       const header = document.createElement("div");
       header.style.display = "flex";
       header.style.justifyContent = "space-between";
       header.style.alignItems = "center";
       header.style.position = "sticky";
-      header.style.top = "-10px";           // 上端にピッタリ固定
-      header.style.background = "#000000";   // スクロールした行が透けないように背景を黒に
-      header.style.zIndex = "10";           // 変数行より手前に表示
+      header.style.top = "-10px";
+      header.style.background = "#000000";
+      header.style.zIndex = "10";
       header.style.padding = "6px 0 10px 0";
       header.style.marginBottom = "4px";
 
@@ -700,7 +701,6 @@ try {
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
         else sortMode = "def";
-        console.log("[ExtVars] ソートモード:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
@@ -821,9 +821,12 @@ try {
           row.removeAttribute("draggable");
         };
       });
-      requestAnimationFrame(() => {
-        center.scrollTop = categoryScrollMap[currentCategory] || 0;
-      });
+
+      // ★ ブラウザの描画完了後に目的のスクロール位置を確実に適用
+      const targetScroll = categoryScrollMap[currentCategory] || 0;
+      setTimeout(() => {
+        center.scrollTop = targetScroll;
+      }, 0);
     }
 
     rebuildCategories();
