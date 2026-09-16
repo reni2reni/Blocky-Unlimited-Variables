@@ -380,6 +380,10 @@ try {
       .ev-cat-left{display:flex;align-items:center;gap:8px}
       .ev-sort-btn{background:#2a2a2a;border:1px solid #444;font-size:12px;padding:3px 8px;margin-left:8px;border-radius:4px;cursor:pointer}
       .ev-sort-btn:hover{background:#3a3a3a}
+      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:220px}
+      .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:14px;box-sizing:border-box;outline:none}
+      .ev-prompt-input:focus{border-color:#008a00}
+      .ev-prompt-btns{display:flex;justify-content:flex-end;gap:6px}
     `;
     document.head.appendChild(style);
   })();
@@ -389,8 +393,95 @@ try {
   let modalOverlay = null;
   function removeModal() { if (modalOverlay) { try { modalOverlay.remove(); } catch (e) { } modalOverlay = null; } }
 
+  // 独自入力ポップアップの表示ヘルパー
+  let currentPrompt = null;
+  function removePrompt() {
+    if (currentPrompt) {
+      try { currentPrompt.remove(); } catch (e) { }
+      currentPrompt = null;
+    }
+  }
+
+  function showInlinePrompt(x, y, initialValue, onConfirm) {
+    removePrompt();
+
+    const pop = document.createElement("div");
+    pop.className = "ev-prompt-popover";
+
+    // 入力欄 [                     ]
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "ev-prompt-input";
+    input.value = initialValue || "";
+
+    // ボタン欄 [OK][CANCEL]
+    const btnRow = document.createElement("div");
+    btnRow.className = "ev-prompt-btns";
+
+    const okBtn = document.createElement("button");
+    okBtn.className = "ev-btn ev-add";
+    okBtn.innerText = "OK";
+    okBtn.style.padding = "4px 10px";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "ev-btn ev-edit";
+    cancelBtn.innerText = "CANCEL";
+    cancelBtn.style.padding = "4px 10px";
+
+    btnRow.appendChild(okBtn);
+    btnRow.appendChild(cancelBtn);
+
+    pop.appendChild(input);
+    pop.appendChild(btnRow);
+    document.body.appendChild(pop);
+    currentPrompt = pop;
+
+    // マウスカーソルの左側に配置 (画面外にはみ出ないよう調整)
+    const popWidth = 230;
+    let leftPos = x - popWidth - 10;
+    if (leftPos < 10) leftPos = x + 15; // 画面左端を超えるなら右側に表示
+    let topPos = y - 20;
+    if (topPos + 90 > window.innerHeight) topPos = window.innerHeight - 95;
+
+    pop.style.left = `${leftPos}px`;
+    pop.style.top = `${topPos}px`;
+
+    // フォーカス＆全選択（上書き・編集を即座にしやすくする）
+    input.focus();
+    input.select();
+
+    // アクション処理
+    const doConfirm = () => {
+      const val = input.value.trim();
+      if (val) {
+        removePrompt();
+        onConfirm(val);
+      }
+    };
+
+    okBtn.onclick = (e) => { e.stopPropagation(); doConfirm(); };
+    cancelBtn.onclick = (e) => { e.stopPropagation(); removePrompt(); };
+
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); doConfirm(); }
+      else if (e.key === "Escape") { e.preventDefault(); removePrompt(); }
+    };
+
+    // ポップアップ外をクリックしたら閉じる
+    setTimeout(() => {
+      const outsideClick = (e) => {
+        if (!pop.contains(e.target)) {
+          removePrompt();
+          document.removeEventListener("mousedown", outsideClick);
+        }
+      };
+      document.addEventListener("mousedown", outsideClick);
+    }, 50);
+  }
+
   function openModal() {
     removeModal();
+    removePrompt();
     CATEGORIES = loadCategoryOrder(); // 起動時に最新の順序を復元
     const ws = getMainWorkspaceSafe();
     const live = getLiveRegistry();
@@ -507,7 +598,7 @@ try {
         el.onclick = (e) => {
           if (e.target === handle) return;
           currentCategory = cat;
-          sortMode = "def"; // 切り替え時はDEF順に戻す
+          sortMode = "def";
           rebuildCategories();
           rebuildList();
         };
@@ -549,7 +640,7 @@ try {
       center.ondrop = (ev) => {
         ev.preventDefault();
         const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
-        defaultOrderMap[currentCategory] = [...newOrder]; // 手動順を新しいDEF順として保存
+        defaultOrderMap[currentCategory] = [...newOrder];
         sortMode = "def";
         reorderVariablesInMap(ws, currentCategory, newOrder);
         rebuildCategories();
@@ -589,11 +680,11 @@ try {
       sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
       if (sortMode === "asc") {
-        sortBtn.innerText = "[ A → Z ]";
+        sortBtn.innerText = "並替: [ A → Z ]";
       } else if (sortMode === "desc") {
-        sortBtn.innerText = "[ Z → A ]";
+        sortBtn.innerText = "並替: [ Z → A ]";
       } else {
-        sortBtn.innerText = "[ DEF ]";
+        sortBtn.innerText = "並替: [ DEF (初期順) ]";
       }
 
       sortBtn.onclick = (e) => {
@@ -601,25 +692,25 @@ try {
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
         else sortMode = "def";
-        console.log("[ExtVars] ソートモード:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
       header.appendChild(leftHeader);
 
-      // 右側：Addボタン
+      // 右側：Addボタン (独自ポップアップ呼び出し)
       const addBtn = document.createElement("button");
       addBtn.className = "ev-btn ev-add";
       addBtn.innerText = "Add";
-      addBtn.onclick = () => {
-        const name = prompt("Enter variable name:");
-        if (!name) return;
-        const id = createID();
-        createWorkspaceVariable(ws, name, currentCategory, id);
-        if (!defaultOrderMap[currentCategory]) defaultOrderMap[currentCategory] = [];
-        defaultOrderMap[currentCategory].push(id);
-        rebuildCategories();
-        rebuildList();
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        showInlinePrompt(e.clientX, e.clientY, "", (name) => {
+          const id = createID();
+          createWorkspaceVariable(ws, name, currentCategory, id);
+          if (!defaultOrderMap[currentCategory]) defaultOrderMap[currentCategory] = [];
+          defaultOrderMap[currentCategory].push(id);
+          rebuildCategories();
+          rebuildList();
+        });
       };
       header.appendChild(addBtn);
       center.appendChild(header);
@@ -640,7 +731,6 @@ try {
       } else if (sortMode === "desc") {
         arr.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
       } else {
-        // DEF: 初期順または手動順
         const defIds = defaultOrderMap[currentCategory] || [];
         arr.sort((a, b) => {
           const idxA = defIds.indexOf(a.id);
@@ -675,19 +765,20 @@ try {
 
         const rightCol = document.createElement("div");
 
+        // Edit ボタン (独自ポップアップ呼び出し、初期値をセット)
         const editBtn = document.createElement("button");
         editBtn.className = "ev-btn ev-edit";
         editBtn.style.marginRight = "6px";
         editBtn.innerText = "Edit";
-        editBtn.onclick = () => {
-          const newName = prompt("Enter new name for variable:", v.name);
-          if (!newName) return;
-          const oldName = v.name;
-
-          renameWorkspaceVariable(ws, v._raw, newName);
-          updateBlocksForVariableRename(oldName, newName, ws);
-          rebuildCategories();
-          rebuildList();
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          showInlinePrompt(e.clientX, e.clientY, v.name, (newName) => {
+            const oldName = v.name;
+            renameWorkspaceVariable(ws, v._raw, newName);
+            updateBlocksForVariableRename(oldName, newName, ws);
+            rebuildCategories();
+            rebuildList();
+          });
         };
 
         const delBtn = document.createElement("button");
