@@ -266,12 +266,12 @@ function createID(length = 20) {
                 }
                 if (!nested) {
                     count++;
-                    console.log(`• COUNTED block: ${block.type} (id=${block.id})`);
+                    //console.log(`• COUNTED block: ${block.type} (id=${block.id})`);
                 } else {
-                    console.log(`• SKIPPED nested block: ${block.type} (id=${block.id})`);
+                    //console.log(`• SKIPPED nested block: ${block.type} (id=${block.id})`);
                 }
             }
-        } catch (e) { console.warn("[ExtVars] Variable count check error:", e); }
+        } catch (e) { /*console.warn("[ExtVars] Variable count check error:", e);*/ }
     }
 
     //console.log("=====================================================");
@@ -385,13 +385,13 @@ try {
   })();
 
   // ---------- modal ----------
-  // ---------- modal ----------
+  
   let modalOverlay = null;
   function removeModal() { if (modalOverlay) { try { modalOverlay.remove(); } catch (e) { } modalOverlay = null; } }
 
   function openModal() {
     removeModal();
-    CATEGORIES = loadCategoryOrder();
+    CATEGORIES = loadCategoryOrder(); // 起動時に最新の順序を復元
     const ws = getMainWorkspaceSafe();
     const live = getLiveRegistry();
 
@@ -429,17 +429,17 @@ try {
     content.appendChild(left);
     content.appendChild(center);
 
-    let currentCategory = CATEGORIES[0];
+    let currentCategory = CATEGORIES[0] || "Global";
 
-    // ★ モーダルを開いた時点の「元々の並び順 (DEF)」を記憶
+    // モーダル起動時の初期順序(DEF)を記録
     const defaultOrderMap = {};
     for (const c of CATEGORIES) {
       defaultOrderMap[c] = (live[c] || []).map(v => v.id);
     }
-    let sortMode = "def"; // "def" -> "asc" -> "desc"
+    let sortMode = "def"; // "def" | "asc" | "desc"
 
     // ==========================================
-    // 左側：カテゴリ一覧の再描画 ＆ ドラッグ移動
+    // 左側：カテゴリ一覧のドラッグ並び替え
     // ==========================================
     function initCatDnD() {
       left.ondragover = (ev) => {
@@ -458,12 +458,15 @@ try {
         const domCats = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName).filter(Boolean);
         if (domCats.length > 0) {
           CATEGORIES = domCats;
-          saveCategoryOrder(CATEGORIES); // ★ ここで保存を実行＆ログ出力
+          saveCategoryOrder(CATEGORIES);
         }
         rebuildCategories();
       };
     }
 
+    // ==========================================
+    // 左側：カテゴリ一覧の再描画
+    // ==========================================
     function rebuildCategories() {
       left.innerHTML = "";
       const fresh = getLiveRegistry();
@@ -478,13 +481,13 @@ try {
 
         const count = (live[cat] || []).length;
 
-        // 左側のタグ（ドラッグハンドル）とカテゴリ名
+        // タグ（ドラッグハンドル）＋カテゴリ名
         const leftWrap = document.createElement("div");
         leftWrap.className = "ev-cat-left";
 
         const handle = document.createElement("div");
         handle.className = "ev-drag-handle";
-        handle.title = "ドラッグしてグループ順を変更";
+        handle.title = "ドラッグしてグループ順を移動";
 
         const nameSpan = document.createElement("span");
         nameSpan.style.fontWeight = "600";
@@ -500,18 +503,16 @@ try {
         el.appendChild(leftWrap);
         el.appendChild(countSpan);
 
-        // クリックでカテゴリ切り替え（ハンドル操作時は無視）
-        center.ondrop = (ev) => {
-          ev.preventDefault();
-          const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
-          defaultOrderMap[currentCategory] = [...newOrder]; // ★ 手動で並び替えた順を新しいDEF順として記憶
-          sortMode = "def";
-          reorderVariablesInMap(ws, currentCategory, newOrder);
+        // カテゴリ切り替えクリック
+        el.onclick = (e) => {
+          if (e.target === handle) return;
+          currentCategory = cat;
+          sortMode = "def"; // 切り替え時はDEF順に戻す
           rebuildCategories();
           rebuildList();
         };
 
-        // タグ（ハンドル）を掴んだ時だけドラッグ可能にする
+        // ドラッグ処理
         handle.onmousedown = () => { el.setAttribute("draggable", "true"); };
         handle.onmouseup = () => { el.removeAttribute("draggable"); };
 
@@ -531,7 +532,7 @@ try {
     }
 
     // ==========================================
-    // 右側：変数のドラッグ移動初期化
+    // 右側：変数のドラッグ移動
     // ==========================================
     function initDnDIfNeeded() {
       center.ondragover = (ev) => {
@@ -548,15 +549,16 @@ try {
       center.ondrop = (ev) => {
         ev.preventDefault();
         const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
+        defaultOrderMap[currentCategory] = [...newOrder]; // 手動順を新しいDEF順として保存
+        sortMode = "def";
         reorderVariablesInMap(ws, currentCategory, newOrder);
         rebuildCategories();
         rebuildList();
       };
     }
 
-
     // ==========================================
-    // 右側：変数一覧の再描画 (DEF / A-Z / Z-A 対応)
+    // 右側：変数一覧の再描画
     // ==========================================
     function rebuildList() {
       const fresh = getLiveRegistry();
@@ -581,29 +583,25 @@ try {
       h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${live[currentCategory]?.length || 0}</span>`;
       leftHeader.appendChild(h);
 
-      // 並び替えボタン (DEF -> A-Z -> Z-A -> DEF)
+      // 並び替えボタン
       const sortBtn = document.createElement("button");
       sortBtn.className = "ev-btn";
       sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
 
       if (sortMode === "asc") {
-        sortBtn.innerText = "[ A → Z ]";
+        sortBtn.innerText = "並替: [ A → Z ]";
       } else if (sortMode === "desc") {
-        sortBtn.innerText = "[ Z → A ]";
+        sortBtn.innerText = "並替: [ Z → A ]";
       } else {
-        sortBtn.innerText = "[ DEF ]";
+        sortBtn.innerText = "並替: [ DEF (初期順) ]";
       }
 
       sortBtn.onclick = (e) => {
         e.stopPropagation();
-        if (sortMode === "def") {
-          sortMode = "asc";
-        } else if (sortMode === "asc") {
-          sortMode = "desc";
-        } else {
-          sortMode = "def";
-        }
-        //console.log("[ExtVars] ソートモード切り替え:", sortMode);
+        if (sortMode === "def") sortMode = "asc";
+        else if (sortMode === "asc") sortMode = "desc";
+        else sortMode = "def";
+        console.log("[ExtVars] ソートモード:", sortMode);
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
@@ -618,6 +616,8 @@ try {
         if (!name) return;
         const id = createID();
         createWorkspaceVariable(ws, name, currentCategory, id);
+        if (!defaultOrderMap[currentCategory]) defaultOrderMap[currentCategory] = [];
+        defaultOrderMap[currentCategory].push(id);
         rebuildCategories();
         rebuildList();
       };
@@ -634,13 +634,13 @@ try {
         return;
       }
 
-      // 3モード並び替えロジック
+      // ソート処理
       if (sortMode === "asc") {
         arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       } else if (sortMode === "desc") {
         arr.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
       } else {
-        // DEFモード: 初期記憶順序に復元
+        // DEF: 初期順または手動順
         const defIds = defaultOrderMap[currentCategory] || [];
         arr.sort((a, b) => {
           const idxA = defIds.indexOf(a.id);
@@ -651,7 +651,7 @@ try {
         });
       }
 
-      // 各変数行の生成
+      // 行の作成
       arr.forEach((v) => {
         const row = document.createElement("div");
         row.className = "ev-row";
@@ -707,7 +707,7 @@ try {
         row.appendChild(rightCol);
         center.appendChild(row);
 
-        // 変数行のドラッグ処理
+        // 変数のDnDイベント
         dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
         dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
 
