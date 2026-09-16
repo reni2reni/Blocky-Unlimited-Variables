@@ -284,67 +284,61 @@ function createID(length = 20) {
   // ---------- reorder variables in internal map ----------
   function reorderVariablesInMap(ws, cat, orderedIds) {
     const map = workspaceGetVariableMap(ws);
-    //console.log("==============================================");
-    //console.log("[ExtVars][Reorder] ENTER for category:", cat);
-
     if (!map) {
-        //console.warn("[ExtVars][Reorder] No variable map");
-        return;
+      //console.warn("[ExtVars][Reorder] No variable map");
+      return;
     }
 
-    // Portal fork: variables are stored in a Map called `variableMap`
     const vm = map.variableMap;
-    if (!vm || typeof vm.get !== "function") {
-        //console.warn("[ExtVars][Reorder] variableMap is not a Map:", vm);
-        return;
-    }
+    if (!vm || typeof vm.get !== "function") return;
 
     const raw = vm.get(cat);
-    //console.log("[ExtVars][Reorder] raw array for", cat, "=", raw);
+    if (!Array.isArray(raw)) return;
 
-    if (!Array.isArray(raw)) {
-        //console.warn("[ExtVars][Reorder] No raw array for category:", cat, "raw:", raw);
-        //console.log("==============================================");
-        return;
-    }
+    //console.log(`[ExtVars][Reorder] カテゴリ「${cat}」の内部登録順を再構築します`);
 
-    //console.log("[ExtVars][Reorder] BEFORE:", raw.map(v => getVarId(v)));
-
-    const newArr = [];
-
-    for (const id of orderedIds) {
-        const v = raw.find(x => getVarId(x) === id);
-        if (v) newArr.push(v);
-    }
-
+    // 1. 既存の変数オブジェクト（ID・参照）を一時退避
+    const varMap = new Map();
     for (const v of raw) {
-        if (!newArr.includes(v)) newArr.push(v);
+      varMap.set(getVarId(v), v);
     }
 
-    //console.log("[ExtVars][Reorder] AFTER:", newArr.map(v => getVarId(v)));
+    // 2. 指定された新しい順番で配列を作成
+    const newArr = [];
+    for (const id of orderedIds) {
+      if (varMap.has(id)) {
+        newArr.push(varMap.get(id));
+        varMap.delete(id);
+      }
+    }
+    // 漏れがある場合は末尾に追加
+    for (const v of varMap.values()) {
+      newArr.push(v);
+    }
 
-    // Write back into the Map
-    vm.set(cat, newArr);
+    // 3. 内部配列を一旦空にし、上から順に再登録
+    raw.length = 0;
+    for (const v of newArr) {
+      raw.push(v);
+    }
 
-    // Force Portal to detect a change (same trick used in rename)
-try {
-    const dummyName = "__EXTVARS_ORDER_DUMMY__";
-    const dummyId = "EXTVARS_ORDER_DUMMY_" + Date.now();
+    // 4. Mapに確実に再セット
+    vm.set(cat, raw);
 
-    const dummyVar = createWorkspaceVariable(ws, dummyName, "Global", dummyId);
-
-    if (dummyVar) {
+    // 5. Portalのセーブ検知とドロップダウン更新をトリガー
+    try {
+      const dummyName = "__EXTVARS_ORDER_DUMMY__";
+      const dummyId = "EXTVARS_ORDER_DUMMY_" + Date.now();
+      const dummyVar = createWorkspaceVariable(ws, dummyName, cat, dummyId);
+      if (dummyVar) {
         deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
+      }
+    } catch (e) {
+      //console.warn("[ExtVars][Reorder] Dummy variable trick failed:", e);
     }
 
-    //console.log("[ExtVars][Reorder] Dummy variable added & removed to trigger save.");
-} catch (e) {
-    //console.warn("[ExtVars][Reorder] Dummy variable trick failed:", e);
-}
-
-    //console.log("[ExtVars][Reorder] WRITE COMPLETE");
-    //console.log("==============================================");
-}
+    //console.log("[ExtVars][Reorder] 再登録完了");
+  }
 
   // ---------- inject CSS ----------
   (function injectStyle(){
@@ -658,7 +652,7 @@ try {
       const fresh = getLiveRegistry();
       Object.assign(live, fresh);
       center.innerHTML = "";
-      center.scrollTop = 0; // ★ 描画開始時に一度トップへ強制リセット
+      center.scrollTop = 0;
       initDnDIfNeeded();
 
       // ヘッダーコンテナ
@@ -696,11 +690,36 @@ try {
         sortBtn.innerText = "[ DEF ]";
       }
 
+      // ★ ボタンクリックで実際に内部の登録順番を再構築する
       sortBtn.onclick = (e) => {
         e.stopPropagation();
         if (sortMode === "def") sortMode = "asc";
         else if (sortMode === "asc") sortMode = "desc";
         else sortMode = "def";
+
+        let currentVars = [...(live[currentCategory] || [])];
+        if (currentVars.length > 0) {
+          if (sortMode === "asc") {
+            currentVars.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          } else if (sortMode === "desc") {
+            currentVars.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+          } else {
+            const defIds = defaultOrderMap[currentCategory] || [];
+            currentVars.sort((a, b) => {
+              const idxA = defIds.indexOf(a.id);
+              const idxB = defIds.indexOf(b.id);
+              if (idxA === -1) return 1;
+              if (idxB === -1) return -1;
+              return idxA - idxB;
+            });
+          }
+
+          // 内部登録順を上から再構築
+          const sortedIds = currentVars.map(v => v.id);
+          reorderVariablesInMap(ws, currentCategory, sortedIds);
+        }
+
+        rebuildCategories();
         rebuildList();
       };
       leftHeader.appendChild(sortBtn);
@@ -732,22 +751,6 @@ try {
         empty.innerText = "(no variables)";
         center.appendChild(empty);
         return;
-      }
-
-      // ソート処理
-      if (sortMode === "asc") {
-        arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      } else if (sortMode === "desc") {
-        arr.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
-      } else {
-        const defIds = defaultOrderMap[currentCategory] || [];
-        arr.sort((a, b) => {
-          const idxA = defIds.indexOf(a.id);
-          const idxB = defIds.indexOf(b.id);
-          if (idxA === -1) return 1;
-          if (idxB === -1) return -1;
-          return idxA - idxB;
-        });
       }
 
       // 各行の作成
@@ -822,7 +825,7 @@ try {
         };
       });
 
-      // ★ ブラウザの描画完了後に目的のスクロール位置を確実に適用
+      // スクロール位置復元
       const targetScroll = categoryScrollMap[currentCategory] || 0;
       setTimeout(() => {
         center.scrollTop = targetScroll;
